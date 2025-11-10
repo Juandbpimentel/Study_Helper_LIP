@@ -23,7 +23,7 @@ npm run lint        # Executar linter
 
 ### Backend (`/backend`)
 - **Framework**: Spring Boot 3.3.5
-- **Linguagem**: Java 17
+- **Linguagem**: Java 21
 - **Gerenciador de Build**: Gradle
 - **Banco de Dados**: PostgreSQL (Supabase)
 - **Segurança**: Spring Security com JWT
