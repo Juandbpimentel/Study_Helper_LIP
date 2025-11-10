@@ -6,7 +6,7 @@ Sistema feito para realizar gerenciamento de estudos, cronogramas e revisões pa
 Este é um monorepo contendo:
 
 ### Frontend (`/frontend`)
-- **Framework**: Next.js 15 com React
+- **Framework**: Next.js 16 com React 19.1
 - **Linguagem**: TypeScript
 - **Estilização**: Tailwind CSS
 - **Gerenciador de Pacotes**: npm
@@ -22,7 +22,7 @@ npm run lint        # Executar linter
 ```
 
 ### Backend (`/backend`)
-- **Framework**: Spring Boot 3.3.5
+- **Framework**: Spring Boot 3.5.7
 - **Linguagem**: Java 21
 - **Gerenciador de Build**: Gradle
 - **Banco de Dados**: PostgreSQL (Supabase)
