@@ -3,9 +3,13 @@
 # Study Helper Backend - Local Development
 # ========================================
 # Uso: docker-compose up -d
+# O backend deve ser executado via IDE ou Gradle
 # ========================================
 
 services:
+    # ========================================
+    # PostgreSQL Database
+    # ========================================
     postgres:
         image: postgres:16-alpine
         container_name: studyhelper-postgres
@@ -23,7 +27,12 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+        networks:
+            - studyhelper-network
 
+    # ========================================
+    # PgAdmin (Database Management UI)
+    # ========================================
     pgadmin:
         image: dpage/pgadmin4:latest
         container_name: studyhelper-pgadmin
@@ -37,6 +46,12 @@ services:
             - postgres
         volumes:
             - pgadmin_data:/var/lib/pgadmin
+        networks:
+            - studyhelper-network
+
+networks:
+    studyhelper-network:
+        driver: bridge
 
 volumes:
     postgres_data:
@@ -44,12 +59,18 @@ volumes:
 # ========================================
 # Quick Commands:
 #
-# docker-compose up -d          # Iniciar
+# docker-compose up -d          # Iniciar banco e PgAdmin
 # docker-compose down           # Parar
 # docker-compose down -v        # Parar e limpar dados
 # docker-compose logs -f        # Ver logs
 #
 # Acessos:
+# Backend: Execute via IDE ou ./gradlew bootRun
 # PostgreSQL: localhost:5432
 # PgAdmin: http://localhost:5050
+#
+# Connection string para o backend:
+# jdbc:postgresql://localhost:5432/studyhelper
+# Username: postgres
+# Password: postgres
 # ========================================

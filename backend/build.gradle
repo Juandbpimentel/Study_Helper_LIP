@@ -5,6 +5,7 @@ plugins {
     id 'jacoco'
     id 'idea'
     id 'co.uzzu.dotenv.gradle' version '4.0.0'
+    id 'org.flywaydb.flyway' version '10.0.0'
 }
 
 group = 'com.studyhelper'
@@ -242,4 +243,82 @@ idea {
         testSources.from(sourceSets.integrationTest.java.srcDirs)
         testResources.from(sourceSets.integrationTest.resources.srcDirs)
     }
+}
+
+// ========================================
+// Flyway Configuration (Database Migrations)
+// ========================================
+flyway {
+    // Database connection
+    url = System.getenv('SPRING_DATASOURCE_URL') ?: 'jdbc:postgresql://localhost:5432/studyhelper'
+    user = System.getenv('SPRING_DATASOURCE_USERNAME') ?: 'postgres'
+    password = System.getenv('SPRING_DATASOURCE_PASSWORD') ?: 'postgres'
+    
+    // Migration files location
+    locations = ['classpath:db/migration']
+    
+    // Undo configuration (para rollback automático)
+    // ⚠️ Nota: flywayUndo requer Flyway Teams (versão paga)
+    // Caso não tenha, o rollback no CI/CD apenas tentará e logará um aviso
+    // Alternativa: criar migrations de compensação manualmente
+    
+    // Prefixo para migrations de undo (ex: U1__*.sql)
+    // undoSqlMigrationPrefix = 'U'
+    
+    // Validação
+    validateOnMigrate = true
+    validateMigrationNaming = true
+    
+    // Segurança - desabilitar clean em produção
+    cleanDisabled = true
+    
+    // Encoding
+    encoding = 'UTF-8'
+    
+    // Placeholder replacement (opcional)
+    placeholderReplacement = false
+    
+    // Baseline configuration (para bancos existentes)
+    // baselineOnMigrate = true
+    // baselineVersion = '0'
+    // baselineDescription = 'Initial baseline'
+}
+
+// ========================================
+// Flyway Tasks Configuration
+// ========================================
+
+// Task para limpar banco (⚠️ APENAS DESENVOLVIMENTO!)
+tasks.named('flywayClean') {
+    doFirst {
+        if (System.getenv('SPRING_PROFILES_ACTIVE') == 'prod') {
+            throw new GradleException('❌ flywayClean está DESABILITADO em produção!')
+        }
+        logger.warn('⚠️ ATENÇÃO: Limpando banco de dados! Todos os dados serão perdidos.')
+    }
+}
+
+// Task para validar migrations
+tasks.register('validateMigrations') {
+    description = 'Valida migrations sem executá-las'
+    group = 'flyway'
+    dependsOn 'flywayValidate'
+}
+
+// Task para ver informações das migrations
+tasks.register('migrationInfo') {
+    description = 'Mostra informações sobre migrations'
+    group = 'flyway'
+    dependsOn 'flywayInfo'
+}
+
+// Task para fazer backup antes de migration
+tasks.register('migrateWithBackup') {
+    description = 'Executa migrations com backup do estado atual'
+    group = 'flyway'
+    doFirst {
+        logger.lifecycle('📋 Obtendo estado atual das migrations...')
+    }
+    dependsOn 'flywayInfo', 'flywayMigrate'
+    tasks.findByName('flywayMigrate').mustRunAfter 'flywayInfo'
 }

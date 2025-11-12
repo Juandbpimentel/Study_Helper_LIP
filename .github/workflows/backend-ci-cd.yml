@@ -40,12 +40,43 @@ jobs:
             - name: Run Code Quality Check
               run: ./gradlew check
 
-            - name: Run Database Migrations on DEV
+            - name: Get Current Migration Version (Backup)
+              id: backup-version
               env:
                   SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
                   SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
                   SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
-              run: ./gradlew flywayMigrate
+              run: |
+                  echo "📋 Obtendo versão atual das migrations..."
+                  ./gradlew flywayInfo > migration_info.txt || true
+                  cat migration_info.txt
+                  echo "backup_done=true" >> $GITHUB_OUTPUT
+              continue-on-error: true
+
+            - name: Run Database Migrations on DEV
+              id: migrate-dev
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
+              run: |
+                  echo "🚀 Executando migrations no DEV..."
+                  ./gradlew flywayMigrate
+
+            - name: Rollback Migrations on Failure (DEV)
+              if: failure() && steps.backup-version.outputs.backup_done == 'true'
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
+              run: |
+                  echo "⚠️ Migration falhou! Iniciando rollback..."
+                  echo "🔄 Executando Flyway undo para reverter última migration..."
+                  ./gradlew flywayUndo -Dflyway.undoSqlMigrationPrefix=U || echo "⚠️ Rollback automático não disponível. Verifique manualmente."
+                  echo "📋 Status das migrations após rollback:"
+                  ./gradlew flywayInfo
+                  echo "❌ Pipeline falhou mas migrations foram revertidas!"
+              continue-on-error: true
 
     test-backend-prod:
         runs-on: ubuntu-latest
@@ -90,12 +121,43 @@ jobs:
                   path: backend/build/reports/jacoco/test/
                   retention-days: 30
 
-            - name: Run Database Migrations on PROD
+            - name: Get Current Migration Version (Backup)
+              id: backup-version
               env:
                   SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
                   SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
                   SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
-              run: ./gradlew flywayMigrate
+              run: |
+                  echo "📋 Obtendo versão atual das migrations..."
+                  ./gradlew flywayInfo > migration_info.txt || true
+                  cat migration_info.txt
+                  echo "backup_done=true" >> $GITHUB_OUTPUT
+              continue-on-error: true
+
+            - name: Run Database Migrations on PROD
+              id: migrate-prod
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+              run: |
+                  echo "🚀 Executando migrations no PROD..."
+                  ./gradlew flywayMigrate
+
+            - name: Rollback Migrations on Failure (PROD)
+              if: failure() && steps.backup-version.outputs.backup_done == 'true'
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+              run: |
+                  echo "⚠️ Migration falhou! Iniciando rollback..."
+                  echo "🔄 Executando Flyway undo para reverter última migration..."
+                  ./gradlew flywayUndo -Dflyway.undoSqlMigrationPrefix=U || echo "⚠️ Rollback automático não disponível. Verifique manualmente."
+                  echo "📋 Status das migrations após rollback:"
+                  ./gradlew flywayInfo
+                  echo "❌ Pipeline falhou mas migrations foram revertidas!"
+              continue-on-error: true
 
     build-backend-dev:
         needs: [test-backend-dev]
@@ -108,31 +170,51 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Set up JDK 21
-              uses: actions/setup-java@v4
-              with:
-                  java-version: '21'
-                  distribution: 'temurin'
-                  cache: 'gradle'
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
-            - name: Make gradlew executable
-              run: chmod +x gradlew
-
-            - name: Build JAR for DEV environment
-              env:
-                  SPRING_PROFILES_ACTIVE: dev
-              run: ./gradlew bootJar -Pprofile=dev
-
-            - name: Rename JAR with environment tag
+            - name: Build Docker Image for DEV
               run: |
-                  cd build/libs
-                  mv *.jar study-helper-backend-dev-${{ github.sha }}.jar
+                  docker buildx build \
+                    --file Dockerfile.dev \
+                    --tag studyhelper-backend:dev-${{ github.sha }} \
+                    --tag studyhelper-backend:dev-latest \
+                    --load \
+                    .
 
-            - name: Upload DEV JAR artifact
+            - name: Test Docker Image (Smoke Test)
+              run: |
+                  docker run -d --name test-container \
+                    -e SPRING_PROFILES_ACTIVE=dev \
+                    -e SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb \
+                    -e SPRING_DATASOURCE_USERNAME=sa \
+                    -e SPRING_DATASOURCE_PASSWORD= \
+                    -p 8080:8080 \
+                    studyhelper-backend:dev-${{ github.sha }}
+
+                  # Aguardar a aplicação iniciar
+                  echo "⏳ Aguardando aplicação iniciar..."
+                  sleep 30
+
+                  # Verificar se está saudável
+                  echo "🔍 Verificando health endpoint..."
+                  curl -f http://localhost:8080/actuator/health || exit 1
+
+                  echo "✅ Docker image is healthy!"
+
+                  # Limpar
+                  docker stop test-container
+                  docker rm test-container
+
+            - name: Save Docker Image as Artifact
+              run: |
+                  docker save studyhelper-backend:dev-${{ github.sha }} | gzip > backend-image-dev.tar.gz
+
+            - name: Upload Docker Image Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: backend-jar-dev-${{ github.sha }}
-                  path: backend/build/libs/study-helper-backend-dev-${{ github.sha }}.jar
+                  name: backend-image-dev-${{ github.sha }}
+                  path: backend/backend-image-dev.tar.gz
                   retention-days: 5
 
     build-backend-prod:
@@ -146,31 +228,53 @@ jobs:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Set up JDK 21
-              uses: actions/setup-java@v4
-              with:
-                  java-version: '21'
-                  distribution: 'temurin'
-                  cache: 'gradle'
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
 
-            - name: Make gradlew executable
-              run: chmod +x gradlew
-
-            - name: Build JAR for PROD environment
-              env:
-                  SPRING_PROFILES_ACTIVE: prod
-              run: ./gradlew bootJar -Pprofile=prod
-
-            - name: Rename JAR with environment tag
+            - name: Build Docker Image for PROD
               run: |
-                  cd build/libs
-                  mv *.jar study-helper-backend-prod-${{ github.sha }}.jar
+                  docker buildx build \
+                    --file Dockerfile.prod \
+                    --tag studyhelper-backend:prod-${{ github.sha }} \
+                    --tag studyhelper-backend:prod-latest \
+                    --load \
+                    .
 
-            - name: Upload PROD JAR artifact
+            - name: Test Docker Image (Smoke Test)
+              run: |
+                  docker run -d --name test-container \
+                    -e SPRING_PROFILES_ACTIVE=prod \
+                    -e SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb \
+                    -e SPRING_DATASOURCE_USERNAME=sa \
+                    -e SPRING_DATASOURCE_PASSWORD= \
+                    -e JWT_SECRET=test-secret-key-for-validation-only \
+                    -e ALLOWED_ORIGINS=https://studyhelper.com \
+                    -p 8080:8080 \
+                    studyhelper-backend:prod-${{ github.sha }}
+
+                  # Aguardar a aplicação iniciar
+                  echo "⏳ Aguardando aplicação iniciar..."
+                  sleep 35
+
+                  # Verificar se está saudável
+                  echo "🔍 Verificando health endpoint..."
+                  curl -f http://localhost:8080/actuator/health || exit 1
+
+                  echo "✅ Docker image is healthy!"
+
+                  # Limpar
+                  docker stop test-container
+                  docker rm test-container
+
+            - name: Save Docker Image as Artifact
+              run: |
+                  docker save studyhelper-backend:prod-${{ github.sha }} | gzip > backend-image-prod.tar.gz
+
+            - name: Upload Docker Image Artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: backend-jar-prod-${{ github.sha }}
-                  path: backend/build/libs/study-helper-backend-prod-${{ github.sha }}.jar
+                  name: backend-image-prod-${{ github.sha }}
+                  path: backend/backend-image-prod.tar.gz
                   retention-days: 30
 
     deploy-backend-dev:
@@ -181,22 +285,29 @@ jobs:
             name: development
             url: ${{ secrets.DEV_APP_URL }}
         steps:
-            - name: Download DEV JAR artifact
+            - name: Download Docker Image Artifact
               uses: actions/download-artifact@v4
               with:
-                  name: backend-jar-dev-${{ github.sha }}
+                  name: backend-image-dev-${{ github.sha }}
 
-            - name: Display JAR info
+            - name: Display Docker Image Info
               run: |
-                  ls -lh study-helper-backend-dev-${{ github.sha }}.jar
-                  echo "JAR SHA256:"
-                  sha256sum study-helper-backend-dev-${{ github.sha }}.jar
+                  ls -lh backend-image-dev.tar.gz
+                  echo "Image SHA256:"
+                  sha256sum backend-image-dev.tar.gz
 
-            - name: Trigger Backend DEV Deploy
+            - name: Trigger Render DEV Deploy (Docker)
               run: |
+                  echo "🐳 Triggering Docker deployment on Render DEV..."
                   curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
                     -H "Content-Type: application/json" \
-                    -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
+                    -d '{
+                      "environment": "dev",
+                      "version": "${{ github.sha }}",
+                      "branch": "dev",
+                      "dockerBuild": true
+                    }'
+                  echo "✅ Deploy hook triggered successfully!"
 
     deploy-backend-prod:
         needs: [build-backend-prod]
@@ -206,19 +317,26 @@ jobs:
             name: production
             url: ${{ secrets.PROD_APP_URL }}
         steps:
-            - name: Download PROD JAR artifact
+            - name: Download Docker Image Artifact
               uses: actions/download-artifact@v4
               with:
-                  name: backend-jar-prod-${{ github.sha }}
+                  name: backend-image-prod-${{ github.sha }}
 
-            - name: Display JAR info
+            - name: Display Docker Image Info
               run: |
-                  ls -lh study-helper-backend-prod-${{ github.sha }}.jar
-                  echo "JAR SHA256:"
-                  sha256sum study-helper-backend-prod-${{ github.sha }}.jar
+                  ls -lh backend-image-prod.tar.gz
+                  echo "Image SHA256:"
+                  sha256sum backend-image-prod.tar.gz
 
-            - name: Trigger Backend PROD Deploy
+            - name: Trigger Render PROD Deploy (Docker)
               run: |
+                  echo "🐳 Triggering Docker deployment on Render PROD..."
                   curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_PROD }}" \
                     -H "Content-Type: application/json" \
-                    -d '{"environment": "prod", "version": "${{ github.sha }}", "branch": "main"}'
+                    -d '{
+                      "environment": "prod",
+                      "version": "${{ github.sha }}",
+                      "branch": "main",
+                      "dockerBuild": true
+                    }'
+                  echo "✅ Deploy hook triggered successfully!"

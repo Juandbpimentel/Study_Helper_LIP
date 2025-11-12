@@ -1,0 +1,54 @@
+# ========================================
+# Dockerfile - Development Environment
+# Study Helper Backend
+# ========================================
+# Optimizado para desenvolvimento rápido
+# ========================================
+
+# Stage 1: Build
+FROM gradle:9.1.0-jdk21-alpine AS builder
+
+WORKDIR /app
+
+# Copiar arquivos de configuração do Gradle
+COPY build.gradle settings.gradle gradlew ./
+COPY gradle ./gradle
+
+# Copiar código fonte
+COPY src ./src
+
+# Build da aplicação (pular testes para build mais rápido no dev)
+RUN ./gradlew bootJar -x test --no-daemon
+
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Instalar ferramentas úteis para debugging (apenas dev)
+RUN apk add --no-cache curl wget
+
+# Criar usuário não-root para segurança
+RUN addgroup -S spring && adduser -S spring -G spring
+
+# Copiar o JAR do stage de build
+COPY --from=builder /app/build/libs/*.jar app.jar
+
+# Dar permissões ao usuário spring
+RUN chown -R spring:spring /app
+
+USER spring:spring
+
+# Expor porta 8080
+EXPOSE 8080
+
+# Healthcheck menos rigoroso para dev
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+# Comando para executar a aplicação com perfil dev
+ENTRYPOINT ["java", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-Dspring.profiles.active=dev", \
+  "-jar", \
+  "app.jar"]

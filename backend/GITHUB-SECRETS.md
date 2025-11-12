@@ -10,7 +10,7 @@ Este guia mostra como configurar os **GitHub Environments** e **Secrets** para d
 ### 🏗️ Arquitetura do Projeto
 
 - **Frontend**: Netlify (https://netlify.com)
-- **Backend**: Render (https://render.com)
+- **Backend**: Render com Docker (https://render.com)
 - **Database**: Configurada no Render via variáveis de ambiente
 
 ### 📦 Secrets vs Environment Variables
@@ -35,12 +35,12 @@ O projeto usa **3 environments** no GitHub:
 
 1. **`development`** (branch: `dev`)
    - Frontend: Netlify Dev Site
-   - Backend: Render Dev Service
+   - Backend: Render Dev Service (Docker)
    - Database: Supabase Dev Project
 
 2. **`production`** (branch: `main`)
    - Frontend: Netlify Production Site
-   - Backend: Render Production Service
+   - Backend: Render Production Service (Docker)
    - Database: Supabase Production Project
 
 3. **`testing`** (PRs para `dev` ou `main`)
@@ -168,9 +168,16 @@ Qualquer serviço PostgreSQL funciona. Você só precisa da connection string JD
 
 ---
 
-### 2️⃣ Render (Backend)
+### 2️⃣ Render (Backend) - 🐳 ARQUITETURA DOCKER
 
-#### Criar Web Service DEV
+> **💡 IMPORTANTE**: O Render usa Docker para rodar o backend. Temos 3 Dockerfiles:
+> - `Dockerfile` - Genérico (auto-detect do Render)
+> - `Dockerfile.dev` - Otimizado para desenvolvimento (usado pelo GitHub Actions para DEV)
+> - `Dockerfile.prod` - Otimizado para produção (usado pelo GitHub Actions para PROD)
+>
+> 📖 **Documentação completa**: Veja `backend/README-DOCKER.md` para detalhes de uso.
+
+#### Criar Web Service DEV com Docker
 
 1. Acesse [render.com](https://render.com)
 2. Clique em **New** > **Web Service**
@@ -179,9 +186,10 @@ Qualquer serviço PostgreSQL funciona. Você só precisa da connection string JD
    - **Name**: `studyhelper-backend-dev`
    - **Branch**: `dev`
    - **Root Directory**: `backend`
-   - **Runtime**: `Java`
-   - **Build Command**: `./gradlew build -x test`
-   - **Start Command**: `java -jar build/libs/*.jar`
+   - **Runtime**: **Docker** ⬅️ **IMPORTANTE: Selecione Docker!**
+   - **Dockerfile Path**: `Dockerfile` (Render usará o Dockerfile genérico)
+   - **Docker Build Context**: `backend` (ou deixe vazio)
+   - **Docker Command**: Deixe vazio (usará o ENTRYPOINT do Dockerfile)
    - **Plan**: Free (para dev)
 
 #### ⚠️ Desativar Auto-Deploy no Render
@@ -216,6 +224,10 @@ JWT_EXPIRATION=86400000
 
 # CORS (cole a URL exata do Netlify DEV)
 ALLOWED_ORIGINS=https://dev-studyhelper.netlify.app
+
+# Porta (Render usa PORT, Spring Boot usa SERVER_PORT)
+PORT=8080
+SERVER_PORT=8080
 ```
 
 💡 **Dica**: As credenciais do banco são:
@@ -234,12 +246,15 @@ ALLOWED_ORIGINS=https://dev-studyhelper.netlify.app
    - Configure no GitHub: `DEV_APP_URL`
    - Configure no GitHub: `API_URL_DEV` (adicione `/api` no final)
 
-#### Criar Web Service PROD
+#### Criar Web Service PROD com Docker
 
 Repita o processo com:
 - **Name**: `studyhelper-backend-prod`
 - **Branch**: `main`
-- **Plan**: Starter ou Professional (recomendado)
+- **Root Directory**: `backend`
+- **Runtime**: **Docker** ⬆️ **IMPORTANTE: Selecione Docker!**
+- **Dockerfile Path**: `Dockerfile` (Render usará o Dockerfile genérico)
+- **Plan**: Starter ou Professional (recomendado para produção)
 - **⚠️ Desative o Auto-Deploy** (Settings > Build & Deploy > Auto-Deploy: No)
 - **Environment Variables**: Configure com credenciais do banco PROD (diferentes do DEV!)
 - **Deploy Hook**: Obtenha e configure `BACKEND_DEPLOY_HOOK_URL_PROD`
@@ -282,6 +297,73 @@ Repita o processo com:
 
 ---
 
+## 🐳 Arquitetura Docker
+
+### 📦 Dockerfiles Disponíveis
+
+O projeto possui 3 Dockerfiles otimizados para diferentes cenários:
+
+#### 1. `Dockerfile` (Generic - Usado pelo Render)
+- **Uso**: Auto-detect do Render
+- **Características**: Multi-stage build, JRE Alpine, usuário não-root
+- **Profile**: Definido via `SPRING_PROFILES_ACTIVE` no Render
+- **Tamanho**: ~210MB
+
+#### 2. `Dockerfile.dev` (Development)
+- **Uso**: Desenvolvimento local e CI/CD para DEV
+- **Características**: Build rápido (sem testes), ferramentas de debug
+- **Profile**: `dev` pré-configurado
+- **Tamanho**: ~220MB
+- **Build**: `docker build -f Dockerfile.dev -t studyhelper-backend:dev .`
+
+#### 3. `Dockerfile.prod` (Production)
+- **Uso**: CI/CD para PROD (validação)
+- **Características**: Build com testes, JVM otimizada, segurança máxima
+- **Profile**: `prod` pré-configurado
+- **Tamanho**: ~210MB
+- **Build**: `docker build -f Dockerfile.prod -t studyhelper-backend:prod .`
+
+### 🔄 Fluxo CI/CD com Docker
+
+#### Branch DEV → Render DEV
+1. ✅ Tests (JUnit + Testcontainers)
+2. ✅ Build Docker Image (`Dockerfile.dev`)
+3. ✅ Test Docker Image (healthcheck)
+4. ✅ Migrations (Flyway)
+5. 🚀 Deploy Hook → Render rebuilds com `Dockerfile`
+
+#### Branch MAIN → Render PROD
+1. ✅ Tests + Coverage
+2. ✅ Build Docker Image (`Dockerfile.prod`)
+3. ✅ Test Docker Image (healthcheck)
+4. ✅ Migrations (Flyway)
+5. 🚀 Deploy Hook → Render rebuilds com `Dockerfile`
+
+### 📖 Documentação Completa
+
+Para instruções detalhadas sobre uso de Docker, consulte:
+- **`backend/README-DOCKER.md`** - Guia completo de Docker
+- **`backend/docker-compose.yml`** - Stack local (backend + postgres + pgadmin)
+
+---
+
+## 🐳 Vantagens do Docker no Render
+
+### ✅ Benefícios
+
+1. **Controle Total**: Você define exatamente o ambiente de execução
+2. **Consistência**: Mesmo ambiente em dev, staging e prod
+3. **Multi-stage Build**: Imagem final leve (JRE apenas, sem JDK/Gradle)
+4. **Segurança**: Imagem Alpine Linux mínima + usuário não-root
+5. **Portabilidade**: Roda em qualquer lugar (local, Render, AWS, etc)
+
+### 📊 Comparação de Tamanho
+
+- **Sem multi-stage**: ~600MB (JDK + Gradle + código)
+- **Com multi-stage**: ~200MB (JRE + JAR apenas)
+
+---
+
 ## 🔒 Boas Práticas de Segurança
 
 ### ✅ DO (Faça)
@@ -291,6 +373,8 @@ Repita o processo com:
 - ✅ Use gerenciadores de senhas
 - ✅ Rotacione credenciais periodicamente
 - ✅ Use diferentes credenciais para DEV e PROD
+- ✅ Use imagens Docker oficiais e atualizadas
+- ✅ Execute aplicação como usuário não-root no Docker
 
 ### ❌ DON'T (Não Faça)
 - ❌ **NUNCA** commite credenciais reais no código
@@ -298,12 +382,35 @@ Repita o processo com:
 - ❌ **NUNCA** use senhas fracas ou padrão
 - ❌ **NUNCA** reutilize senhas entre ambientes
 - ❌ **NUNCA** exponha secrets em logs ou mensagens de erro
+- ❌ **NUNCA** execute containers Docker como root em produção
 
 ---
 
 ## 🧪 Testar Configuração
 
-Após configurar todos os secrets:
+### Testar Docker Localmente
+
+```bash
+# Build da imagem
+cd backend
+docker build -t studyhelper-backend:dev .
+
+# Rodar container
+docker run -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=dev \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/studyhelper \
+  -e SPRING_DATASOURCE_USERNAME=postgres \
+  -e SPRING_DATASOURCE_PASSWORD=your_password \
+  -e JWT_SECRET=your_jwt_secret \
+  -e JWT_EXPIRATION=86400000 \
+  -e ALLOWED_ORIGINS=http://localhost:3000 \
+  studyhelper-backend:dev
+
+# Testar
+curl http://localhost:8080/actuator/health
+```
+
+### Testar Deploy no GitHub Actions
 
 ```bash
 # Trigger workflow manualmente
@@ -311,7 +418,7 @@ gh workflow run deploy-dev.yml
 
 # Ou faça um commit na branch dev
 git checkout dev
-git commit --allow-empty -m "test: trigger CI/CD"
+git commit --allow-empty -m "test: trigger Docker CI/CD"
 git push origin dev
 ```
 
@@ -335,6 +442,16 @@ Verifique os logs em: **Actions** > **Workflows**
 - Verifique se o serviço no Render está ativo
 - Verifique se o auto-deploy está desativado no Render
 
+### Erro: "Docker build failed"
+- Verifique se o Dockerfile está no caminho correto
+- Verifique se as dependências do Gradle estão corretas
+- Teste o build localmente: `docker build -t test .`
+
+### Erro: "Container crashes on startup"
+- Verifique os logs no Render dashboard
+- Verifique se todas as variáveis de ambiente estão configuradas
+- Teste o container localmente com as mesmas variáveis
+
 ---
 
 ## 📚 Recursos
@@ -342,8 +459,11 @@ Verifique os logs em: **Actions** > **Workflows**
 - [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
 - [GitHub Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 - [Render Deploy Hooks](https://render.com/docs/deploy-hooks)
+- [Render Docker Deploys](https://render.com/docs/docker)
 - [Netlify CI/CD](https://docs.netlify.com/configure-builds/overview/)
 - [Supabase Database](https://supabase.com/docs/guides/database)
+- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Multi-stage Docker Builds](https://docs.docker.com/build/building/multi-stage/)
 
 ---
 
