@@ -44,10 +44,11 @@ Study_Helper_LIP/
 ## 🤝 Contribuindo
 
 1. Clone o repositório
-2. Crie uma branch: `git checkout -b feature/nome`
-3. Commit: `git commit -m 'feat: descrição'`
-4. Push: `git push origin feature/nome`
-5. Abra um Pull Request
+2. Faça checkout para a branch dev: `git checkout origin/dev`
+3. Crie uma branch: `git checkout -b feature/nome`
+4. Commit: `git commit -m 'feat: descrição'`
+5. Push: `git push origin feature/nome`
+6. Abra um Pull Request
 
 Padrão: [Conventional Commits](https://www.conventionalcommits.org/)
 
