@@ -1,0 +1,94 @@
+name: Frontend Test Pipeline
+
+on:
+    pull_request:
+        branches: [main, dev]
+        paths:
+            - 'frontend/**'
+            - '.github/workflows/frontend-test-pr.yml'
+
+jobs:
+    test-frontend-dev:
+        runs-on: ubuntu-latest
+        if: github.base_ref == 'dev'
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'npm'
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install Frontend Dependencies
+              run: npm ci
+
+            - name: Run Linter
+              run: npm run lint
+
+            - name: Run Type Check
+              run: npx tsc --noEmit
+
+            - name: Build Application
+              env:
+                  NODE_ENV: development
+                  NEXT_PUBLIC_API_URL: http://localhost:8080/api
+                  NEXT_PUBLIC_ENV: development
+              run: npm run build
+
+            - name: Run Unit Tests Only
+              env:
+                  NODE_ENV: test
+              run: npm test
+
+    test-frontend-prod:
+        runs-on: ubuntu-latest
+        if: github.base_ref == 'main'
+
+        defaults:
+            run:
+                working-directory: ./frontend
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'npm'
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install Frontend Dependencies
+              run: npm ci
+
+            - name: Run Linter
+              run: npm run lint
+
+            - name: Run Type Check
+              run: npx tsc --noEmit
+
+            - name: Build Application
+              env:
+                  NODE_ENV: production
+                  NEXT_PUBLIC_API_URL: http://localhost:8080/api
+                  NEXT_PUBLIC_ENV: test
+              run: npm run build
+
+            - name: Run Unit Tests with Coverage
+              env:
+                  NODE_ENV: test
+              run: npm test -- --coverage
+
+            - name: Upload Test Coverage
+              uses: actions/upload-artifact@v4
+              with:
+                  name: frontend-coverage-pr-${{ github.event.pull_request.number }}
+                  path: frontend/coverage/
+                  retention-days: 7

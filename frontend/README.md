@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend - Study Helper 🎨
 
-## Getting Started
+Interface web com Next.js 15, React 19 e TypeScript.
 
-First, run the development server:
+## Quick Start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Acesso:** http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Estrutura
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+frontend/
+├── src/app/
+│   ├── layout.tsx           # Layout raiz
+│   ├── page.tsx             # Página inicial
+│   └── globals.css          # Estilos globais
+├── public/                  # Arquivos estáticos
+├── .env.example            # Variáveis de ambiente
+└── next.config.ts          # Configuração
+```
 
-## Learn More
+## Comandos
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Desenvolvimento
+npm run dev                  # Hot reload
+npm run build               # Build produção
+npm run start               # Executar build
+npm run lint                # Verificar código
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Configuração
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Environment Variables
 
-## Deploy on Vercel
+```bash
+# .env.local
+NEXT_PUBLIC_API_URL=http://localhost:8080/api
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Para customizar:
+```bash
+cp .env.example .env.local
+# Edite .env.local
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Tecnologias
+
+- Next.js 15
+- React 19
+- TypeScript 5
+- Tailwind CSS 3
+- ESLint 9
+
+## CI/CD
+
+Workflows automáticos em `.github/workflows/`:
+- ✅ Lint e build em PRs
+- ✅ Deploy automático no Netlify
+- ✅ Preview em PRs
+
+**Deploy:**
+- `dev` → Netlify DEV
+- `main` → Netlify PROD
+
+## Troubleshooting
+
+```bash
+# Limpar cache
+rm -rf .next node_modules
+npm install
+
+# Porta 3000 ocupada
+PORT=3001 npm run dev
+
+# Verificar tipos
+npx tsc --noEmit
+
+# Fix lint
+npm run lint -- --fix
+```
+
+## Docs
+
+- [Next.js](https://nextjs.org/docs)
+- [React](https://react.dev)
+- [Tailwind CSS](https://tailwindcss.com/docs)

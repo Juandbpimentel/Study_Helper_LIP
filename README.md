@@ -1,68 +1,65 @@
-# Study_Helper_LIP
-Sistema feito para realizar gerenciamento de estudos, cronogramas e revisões para auxiliar durante a jornada universitária.
+# Study Helper 📚
 
-## Estrutura do Projeto
+Sistema de gerenciamento de estudos, cronogramas e revisões para auxiliar durante a jornada universitária.
 
-Este é um monorepo contendo:
-
-### Frontend (`/frontend`)
-- **Framework**: Next.js 16 com React 19.1
-- **Linguagem**: TypeScript
-- **Estilização**: Tailwind CSS
-- **Gerenciador de Pacotes**: npm
-
-#### Comandos do Frontend
-```bash
-cd frontend
-npm install          # Instalar dependências
-npm run dev         # Executar em modo de desenvolvimento
-npm run build       # Build para produção
-npm run start       # Executar build de produção
-npm run lint        # Executar linter
-```
-
-### Backend (`/backend`)
-- **Framework**: Spring Boot 3.5.7
-- **Linguagem**: Java 21
-- **Gerenciador de Build**: Gradle
-- **Banco de Dados**: PostgreSQL (Supabase)
-- **Segurança**: Spring Security com JWT
-
-#### Dependências do Backend
-- Spring Web
-- Spring Data JPA
-- Spring Security
-- JWT (jjwt 0.12.6)
-- PostgreSQL Driver
-- Spring Validation
-
-#### Comandos do Backend
-```bash
-cd backend
-./gradlew build      # Build do projeto
-./gradlew test       # Executar testes
-./gradlew bootRun    # Executar aplicação
-```
-
-## Configuração
+## 🚀 Quick Start
 
 ### Backend
-Edite o arquivo `backend/src/main/resources/application.properties` com suas credenciais do Supabase:
-```properties
-spring.datasource.url=jdbc:postgresql://your-supabase-url:5432/your-database
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-jwt.secret=your-secret-key
+```bash
+cd backend
+docker-compose up -d
+./gradlew bootRun
 ```
+API disponível em: http://localhost:8080
 
 ### Frontend
-Configure as variáveis de ambiente em `frontend/.env.local`:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8080
+```bash
+cd frontend
+npm install
+npm run dev
+```
+App disponível em: http://localhost:3000
+
+## 📁 Estrutura
+
+```
+Study_Helper_LIP/
+├── frontend/          # Next.js + TypeScript + Tailwind
+├── backend/           # Spring Boot + Java 21 + PostgreSQL
+└── .github/workflows/ # CI/CD automático
 ```
 
-## Desenvolvimento
+## 📚 Documentação Completa
 
-1. Inicie o backend na porta 8080
-2. Inicie o frontend na porta 3000
-3. Acesse o frontend em http://localhost:3000
+- **Backend**: [backend/README.md](backend/README.md)
+- **Frontend**: [frontend/README.md](frontend/README.md)
+- **CI/CD**: [backend/GITHUB-SECRETS.md](backend/GITHUB-SECRETS.md)
+
+## 🛠️ Tecnologias
+
+**Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS  
+**Backend:** Spring Boot 3, Java 21, PostgreSQL 16, Flyway  
+**Infra:** Docker, GitHub Actions, Supabase
+
+## 🤝 Contribuindo
+
+1. Clone o repositório
+2. Crie uma branch: `git checkout -b feature/nome`
+3. Commit: `git commit -m 'feat: descrição'`
+4. Push: `git push origin feature/nome`
+5. Abra um Pull Request
+
+Padrão: [Conventional Commits](https://www.conventionalcommits.org/)
+
+## 📝 Licença
+
+MIT License - veja [LICENSE](LICENSE)
+
+## 👤 Autor
+
+**Juan Pimentel** - [@Juandbpimentel](https://github.com/Juandbpimentel)
+
+---
+
+**Feito com ❤️ para estudantes universitários**
+

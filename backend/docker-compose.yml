@@ -1,0 +1,55 @@
+# ========================================
+# Docker Compose - PostgreSQL + PgAdmin
+# Study Helper Backend - Local Development
+# ========================================
+# Uso: docker-compose up -d
+# ========================================
+
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: studyhelper-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${POSTGRES_DB:-studyhelper}
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+        ports:
+            - '${POSTGRES_PORT:-5432}:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    pgadmin:
+        image: dpage/pgadmin4:latest
+        container_name: studyhelper-pgadmin
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@studyhelper.com}
+            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+        ports:
+            - '${PGADMIN_PORT:-5050}:80'
+        depends_on:
+            - postgres
+        volumes:
+            - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+    postgres_data:
+    pgadmin_data:
+# ========================================
+# Quick Commands:
+#
+# docker-compose up -d          # Iniciar
+# docker-compose down           # Parar
+# docker-compose down -v        # Parar e limpar dados
+# docker-compose logs -f        # Ver logs
+#
+# Acessos:
+# PostgreSQL: localhost:5432
+# PgAdmin: http://localhost:5050
+# ========================================

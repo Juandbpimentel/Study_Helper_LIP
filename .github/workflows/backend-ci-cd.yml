@@ -1,0 +1,224 @@
+name: Backend CI/CD Pipeline
+
+on:
+    push:
+        branches: [main, dev]
+        paths:
+            - 'backend/**'
+
+jobs:
+    test-backend-dev:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev'
+        environment:
+            name: development
+
+        defaults:
+            run:
+                working-directory: ./backend
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  java-version: '21'
+                  distribution: 'temurin'
+                  cache: 'gradle'
+
+            - name: Make gradlew executable
+              run: chmod +x gradlew
+
+            - name: Run Unit Tests
+              run: ./gradlew test
+
+            - name: Run Integration Tests (Testcontainers)
+              run: ./gradlew integrationTest
+
+            - name: Run Code Quality Check
+              run: ./gradlew check
+
+            - name: Run Database Migrations on DEV
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
+              run: ./gradlew flywayMigrate
+
+    test-backend-prod:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main'
+        environment:
+            name: production
+
+        defaults:
+            run:
+                working-directory: ./backend
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  java-version: '21'
+                  distribution: 'temurin'
+                  cache: 'gradle'
+
+            - name: Make gradlew executable
+              run: chmod +x gradlew
+
+            - name: Run Unit Tests
+              run: ./gradlew test
+
+            - name: Run Integration Tests (Testcontainers)
+              run: ./gradlew integrationTest
+
+            - name: Run Code Quality Check
+              run: ./gradlew check
+
+            - name: Test Coverage Report
+              run: ./gradlew jacocoTestReport
+
+            - name: Upload Coverage Report
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-report-prod-${{ github.sha }}
+                  path: backend/build/reports/jacoco/test/
+                  retention-days: 30
+
+            - name: Run Database Migrations on PROD
+              env:
+                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
+                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+              run: ./gradlew flywayMigrate
+
+    build-backend-dev:
+        needs: [test-backend-dev]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        defaults:
+            run:
+                working-directory: ./backend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  java-version: '21'
+                  distribution: 'temurin'
+                  cache: 'gradle'
+
+            - name: Make gradlew executable
+              run: chmod +x gradlew
+
+            - name: Build JAR for DEV environment
+              env:
+                  SPRING_PROFILES_ACTIVE: dev
+              run: ./gradlew bootJar -Pprofile=dev
+
+            - name: Rename JAR with environment tag
+              run: |
+                  cd build/libs
+                  mv *.jar study-helper-backend-dev-${{ github.sha }}.jar
+
+            - name: Upload DEV JAR artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: backend-jar-dev-${{ github.sha }}
+                  path: backend/build/libs/study-helper-backend-dev-${{ github.sha }}.jar
+                  retention-days: 5
+
+    build-backend-prod:
+        needs: [test-backend-prod]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        defaults:
+            run:
+                working-directory: ./backend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up JDK 21
+              uses: actions/setup-java@v4
+              with:
+                  java-version: '21'
+                  distribution: 'temurin'
+                  cache: 'gradle'
+
+            - name: Make gradlew executable
+              run: chmod +x gradlew
+
+            - name: Build JAR for PROD environment
+              env:
+                  SPRING_PROFILES_ACTIVE: prod
+              run: ./gradlew bootJar -Pprofile=prod
+
+            - name: Rename JAR with environment tag
+              run: |
+                  cd build/libs
+                  mv *.jar study-helper-backend-prod-${{ github.sha }}.jar
+
+            - name: Upload PROD JAR artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: backend-jar-prod-${{ github.sha }}
+                  path: backend/build/libs/study-helper-backend-prod-${{ github.sha }}.jar
+                  retention-days: 30
+
+    deploy-backend-dev:
+        needs: [build-backend-dev]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        environment:
+            name: development
+            url: ${{ secrets.DEV_APP_URL }}
+        steps:
+            - name: Download DEV JAR artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: backend-jar-dev-${{ github.sha }}
+
+            - name: Display JAR info
+              run: |
+                  ls -lh study-helper-backend-dev-${{ github.sha }}.jar
+                  echo "JAR SHA256:"
+                  sha256sum study-helper-backend-dev-${{ github.sha }}.jar
+
+            - name: Trigger Backend DEV Deploy
+              run: |
+                  curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
+                    -H "Content-Type: application/json" \
+                    -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
+
+    deploy-backend-prod:
+        needs: [build-backend-prod]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        environment:
+            name: production
+            url: ${{ secrets.PROD_APP_URL }}
+        steps:
+            - name: Download PROD JAR artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: backend-jar-prod-${{ github.sha }}
+
+            - name: Display JAR info
+              run: |
+                  ls -lh study-helper-backend-prod-${{ github.sha }}.jar
+                  echo "JAR SHA256:"
+                  sha256sum study-helper-backend-prod-${{ github.sha }}.jar
+
+            - name: Trigger Backend PROD Deploy
+              run: |
+                  curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_PROD }}" \
+                    -H "Content-Type: application/json" \
+                    -d '{"environment": "prod", "version": "${{ github.sha }}", "branch": "main"}'

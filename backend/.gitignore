@@ -1,9 +1,10 @@
-# Gradle
+e aj# Gradle
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+bin/
 
 # Spring Boot
 *.log
@@ -30,3 +31,27 @@ Thumbs.db
 *.war
 *.ear
 target/
+
+# Environment Variables (apenas .env local)
+.env
+.env.local
+.env.*.local
+
+# Application Properties com credenciais reais
+application-dev.properties
+application-prod.properties
+application-test.properties
+application.properties
+!src/main/resources/application.properties.example
+!src/main/resources/application-*.properties.example
+
+# Docker
+docker-compose.override.yml
+
+# Secrets e Credenciais
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.jks

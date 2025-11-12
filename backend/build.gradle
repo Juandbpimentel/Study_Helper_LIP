@@ -1,46 +1,245 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '3.5.7'
-	id 'io.spring.dependency-management' version '1.1.6'
+    id 'java'
+    id 'org.springframework.boot' version '3.2.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+    id 'idea'
+    id 'co.uzzu.dotenv.gradle' version '4.0.0'
 }
 
 group = 'com.studyhelper'
 version = '0.0.1-SNAPSHOT'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
 }
 
 repositories {
-	mavenCentral()
+    mavenCentral()
+}
+
+// ========================================
+// Load .env file
+// ========================================
+// Automatically loads .env file if it exists (optional for local dev)
+// Priority: System Environment Variables > .env
+// CI/CD não precisa de .env (usa secrets do GitHub)
+env {
+    // Load .env file apenas se existir (não obrigatório)
+    def envFile = file('.env')
+    if (envFile.exists()) {
+        file = envFile
+    }
+}
+
+// ========================================
+// Integration Test Source Sets
+// ========================================
+sourceSets {
+    integrationTest {
+        java {
+            srcDir 'src/integrationTest/java'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    integrationTestImplementation
+    integrationTestRuntimeOnly
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
 dependencies {
-	// Spring Boot Starters
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	
-	// JWT Dependencies
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
-	
-	// PostgreSQL Driver for Supabase
-	runtimeOnly 'org.postgresql:postgresql'
-	
-	// Development Tools
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	
-	// Testing
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // ========================================
+    // Spring Boot Starters
+    // ========================================
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // ========================================
+    // Database - PostgreSQL (Production)
+    // ========================================
+    runtimeOnly 'org.postgresql:postgresql'
+    implementation 'org.flywaydb:flyway-core'
+    
+    // ========================================
+    // Lombok
+    // ========================================
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // ========================================
+    // Testing - Common
+    // ========================================
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // ========================================
+    // Testing - Unit Tests (H2 In-Memory)
+    // ========================================
+    testImplementation 'com.h2database:h2'
+    
+    // ========================================
+    // Testing - Integration Tests (PostgreSQL + Testcontainers)
+    // ========================================
+    // Use BOMs via platform to manage versions
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.3')
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation platform('io.rest-assured:rest-assured-bom:5.5.6')
+    testImplementation 'io.rest-assured:rest-assured'
+
+    // Ensure integrationTest source set has the necessary test libraries explicitly
+    integrationTestImplementation 'org.springframework.boot:spring-boot-starter-test'
+    integrationTestImplementation 'org.junit.jupiter:junit-jupiter'
+    integrationTestImplementation 'org.testcontainers:junit-jupiter'
+    integrationTestImplementation 'org.testcontainers:postgresql'
+    integrationTestImplementation 'org.flywaydb:flyway-core'
+    integrationTestImplementation 'org.assertj:assertj-core'
+    integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-tasks.named('test') {
-	useJUnitPlatform()
+// ========================================
+// Build Configuration
+// ========================================
+def profile = project.hasProperty('profile') ? project.property('profile') : 'dev'
+
+bootJar {
+    archiveFileName = "study-helper-backend-${profile}.jar"
+}
+
+// ========================================
+// Test Configuration - Unit Tests
+// ========================================
+test {
+    useJUnitPlatform()
+    
+    testLogging {
+        events = ["passed", "skipped", "failed"]
+        exceptionFormat = "full"
+        showStandardStreams = false
+    }
+    
+    // Usa src/test/resources/application-test.properties
+    systemProperty 'spring.profiles.active', 'test'
+    
+    // Configurações de memória
+    minHeapSize = "512m"
+    maxHeapSize = "1024m"
+
+    // Garante que apenas testes unitários sejam executados
+    exclude '**/*IntegrationTest*'
+}
+
+tasks.named('processIntegrationTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// ========================================
+// Test Configuration - Integration Tests
+// ========================================
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests with PostgreSQL via Testcontainers.'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter test
+
+    useJUnitPlatform()
+
+    testLogging {
+        events = ["passed", "skipped", "failed"]
+        exceptionFormat = "full"
+        showStandardStreams = false
+    }
+
+    // Usa src/integrationTest/resources/application-integration-test.properties
+    systemProperty 'spring.profiles.active', 'integration-test'
+
+    // Configurações de memória (mais memória para Testcontainers)
+    minHeapSize = "1024m"
+    maxHeapSize = "2048m"
+}
+
+// Removido: check.dependsOn integrationTest
+// Para executar integration tests, use: ./gradlew integrationTest
+// Para executar todos os testes, use: ./gradlew test integrationTest
+
+// ========================================
+// Jacoco Configuration (Code Coverage)
+// ========================================
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+jacocoTestReport {
+    // Não força execução automática dos testes
+    // dependsOn será adicionado dinamicamente se necessário
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/config/**',
+                '**/entity/**',
+                '**/dto/**',
+                '**/*Application.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.70
+            }
+        }
+    }
+}
+
+// Jacoco report só é gerado após os testes que foram executados
+test.finalizedBy jacocoTestReport
+
+// Task para executar todos os testes e gerar relatório de cobertura completo
+tasks.register('allTests') {
+    description = 'Runs all tests (unit + integration) and generates coverage report'
+    group = 'verification'
+    dependsOn test, integrationTest
+}
+
+// Mark integrationTest sources as test sources for IDEA
+idea {
+    module {
+        testSources.from(sourceSets.integrationTest.java.srcDirs)
+        testResources.from(sourceSets.integrationTest.resources.srcDirs)
+    }
 }
