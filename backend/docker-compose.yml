@@ -1,0 +1,110 @@
+# ========================================
+# Docker Compose - PostgreSQL for Local Development
+# Study Helper Backend
+# Created: 2025-11-11
+# Author: Juandbpimentel
+# ========================================
+# Este arquivo configura um PostgreSQL local para desenvolvimento.
+#
+# COMO USAR:
+# 1. Inicie o banco: docker-compose up -d
+# 2. Pare o banco: docker-compose down
+# 3. Limpe tudo: docker-compose down -v
+#
+# O banco estará disponível em: localhost:5432
+# ========================================
+
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: studyhelper-postgres-dev
+        restart: unless-stopped
+        environment:
+            # Credenciais carregadas do arquivo .env
+            # Se .env não existir, usa valores padrão
+            # Extrai do SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/studyhelper
+            POSTGRES_DB: ${SPRING_DATASOURCE_DB:-studyhelper}
+            POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-postgres}
+            POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgres}
+        ports:
+            # Mapeia porta 5432 do container para 5432 do host
+            - '${SPRING_DATASOURCE_PORT:-5432}:5432'
+        volumes:
+            # Persiste os dados do banco mesmo após parar o container
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # Opcional: PgAdmin para administrar o banco via interface web
+    pgadmin:
+        image: dpage/pgadmin4:latest
+        container_name: studyhelper-pgadmin
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@studyhelper.com}
+            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+        ports:
+            # Acesse em: http://localhost:5050
+            - '${PGADMIN_PORT:-5050}:80'
+        depends_on:
+            - postgres
+        volumes:
+            - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+    postgres_data:
+        driver: local
+    pgadmin_data:
+        driver: local
+# ========================================
+# Instruções de Uso
+# ========================================
+#
+# 1. INICIAR O BANCO DE DADOS:
+#    docker-compose up -d
+#
+# 2. VERIFICAR STATUS:
+#    docker-compose ps
+#
+# 3. VER LOGS:
+#    docker-compose logs -f postgres
+#
+# 4. PARAR O BANCO (mantém os dados):
+#    docker-compose stop
+#
+# 5. PARAR E REMOVER CONTAINERS (mantém os dados):
+#    docker-compose down
+#
+# 6. LIMPAR TUDO (remove dados):
+#    docker-compose down -v
+#
+# 7. ACESSAR PGADMIN:
+#    - URL: http://localhost:5050
+#    - Email: admin@studyhelper.com
+#    - Senha: admin
+#    - Adicionar servidor:
+#      * Host: postgres (nome do serviço)
+#      * Port: 5432
+#      * Username: postgres
+#      * Password: postgres
+#
+# 8. CONECTAR VIA PSQL:
+#    psql -h localhost -p 5432 -U postgres -d studyhelper
+#
+# 9. CONFIGURAR NO .env:
+#    SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/studyhelper
+#    SPRING_DATASOURCE_USERNAME=postgres
+#    SPRING_DATASOURCE_PASSWORD=postgres
+#    SPRING_DATASOURCE_DB=studyhelper
+#    SPRING_DATASOURCE_PORT=5432
+#
+# NOTA: O Docker Compose extrai automaticamente as variáveis do .env
+#       - SPRING_DATASOURCE_DB -> POSTGRES_DB
+#       - SPRING_DATASOURCE_USERNAME -> POSTGRES_USER
+#       - SPRING_DATASOURCE_PASSWORD -> POSTGRES_PASSWORD
+#       - SPRING_DATASOURCE_PORT -> porta do container
+#
+# ========================================

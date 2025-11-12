@@ -1,0 +1,232 @@
+name: Frontend CI/CD Pipeline
+
+on:
+    push:
+        branches: [main, dev]
+        paths:
+            - 'frontend/**'
+            - '.github/workflows/frontend-ci-cd.yml'
+
+jobs:
+    test-frontend-dev:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev'
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'yarn'
+                  cache-dependency-path: frontend/yarn.lock
+
+            - name: Install Frontend Dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Run Linter
+              run: yarn lint
+
+            - name: Run Type Check
+              run: yarn type-check
+
+            - name: Run Unit Tests Only
+              env:
+                  NODE_ENV: test
+              run: yarn test:unit
+
+    test-frontend-prod:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main'
+
+        defaults:
+            run:
+                working-directory: ./frontend
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'yarn'
+                  cache-dependency-path: frontend/yarn.lock
+
+            - name: Install Frontend Dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Run Linter
+              run: yarn lint
+
+            - name: Run Type Check
+              run: yarn type-check
+
+            - name: Run Unit Tests with Coverage
+              env:
+                  NODE_ENV: test
+              run: yarn test --coverage
+
+    build-frontend-dev:
+        needs: [test-frontend-dev]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'yarn'
+                  cache-dependency-path: frontend/yarn.lock
+
+            - name: Install Frontend Dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Build Frontend Application for DEV
+              env:
+                  NODE_ENV: development
+                  NEXT_PUBLIC_API_URL: ${{ secrets.API_URL_DEV }}
+                  NEXT_PUBLIC_ENV: development
+                  NEXT_PUBLIC_ANALYTICS_ID: ${{ secrets.ANALYTICS_ID_DEV }}
+              run: yarn build
+
+            - name: Upload DEV Build artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: frontend-build-dev-${{ github.sha }}
+                  path: |
+                      frontend/out/
+                      frontend/.next/
+                  retention-days: 5
+
+    build-frontend-prod:
+        needs: [test-frontend-prod]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: 'yarn'
+                  cache-dependency-path: frontend/yarn.lock
+
+            - name: Install Frontend Dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Build Frontend Application for PROD
+              env:
+                  NODE_ENV: production
+                  NEXT_PUBLIC_API_URL: ${{ secrets.API_URL_PROD }}
+                  NEXT_PUBLIC_ENV: production
+                  NEXT_PUBLIC_ANALYTICS_ID: ${{ secrets.ANALYTICS_ID_PROD }}
+                  NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN_PROD }}
+              run: yarn build
+
+            - name: Upload PROD Build artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: frontend-build-prod-${{ github.sha }}
+                  path: |
+                      frontend/out/
+                      frontend/.next/
+                  retention-days: 30
+
+    deploy-frontend-dev:
+        needs: [build-frontend-dev]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+        environment:
+            name: development-frontend
+            url: ${{ secrets.DEV_FRONTEND_URL }}
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Download DEV Build artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: frontend-build-dev-${{ github.sha }}
+                  path: frontend/
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+
+            - name: Install Netlify CLI
+              run: yarn global add netlify-cli
+
+            - name: Display Build info
+              run: |
+                  echo "Build size:"
+                  du -sh out/ 2>/dev/null || du -sh .next/
+                  echo "Build SHA: ${{ github.sha }}"
+
+            - name: Deploy to Netlify DEV
+              env:
+                  NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_DEV }}
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+              run: |
+                  netlify deploy --dir=out --prod --message "Deploy DEV - ${{ github.sha }}"
+
+    deploy-frontend-prod:
+        needs: [build-frontend-prod]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        environment:
+            name: production-frontend
+            url: ${{ secrets.PROD_FRONTEND_URL }}
+        defaults:
+            run:
+                working-directory: ./frontend
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Download PROD Build artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: frontend-build-prod-${{ github.sha }}
+                  path: frontend/
+
+            - name: Set up Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+
+            - name: Install Netlify CLI
+              run: yarn global add netlify-cli
+
+            - name: Display Build info
+              run: |
+                  echo "Build size:"
+                  du -sh out/ 2>/dev/null || du -sh .next/
+                  echo "Build SHA: ${{ github.sha }}"
+
+            - name: Deploy to Netlify PROD
+              env:
+                  NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_PROD }}
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+              run: |
+                  netlify deploy --dir=out --prod --message "Deploy PROD - ${{ github.sha }}"
