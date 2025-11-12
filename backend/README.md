@@ -46,15 +46,19 @@ docker-compose down -v           # Limpar
 ./gradlew clean build
 ```
 
-## Database
+## Database (Local Development)
 
 **PostgreSQL:** `localhost:5432`
 - Database: `studyhelper`
-- User/Pass: `postgres/postgres`
+- User: `[configured in docker-compose.yml]`
+- Password: `[configured in docker-compose.yml]`
 
 **PgAdmin:** http://localhost:5050
-- Email: `admin@studyhelper.com`
-- Senha: `admin`
+- Email: `[configured in docker-compose.yml]`
+- Password: `[configured in docker-compose.yml]`
+
+> 🔒 **Segurança**: As credenciais locais estão no `docker-compose.yml`. 
+> Para produção, use variáveis de ambiente e nunca commite credenciais reais!
 
 ## Tecnologias
 

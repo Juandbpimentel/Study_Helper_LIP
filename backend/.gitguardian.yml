@@ -1,0 +1,29 @@
+ # GitGuardian Configuration
+# https://docs.gitguardian.com/internal-repositories-monitoring/integrations/git_hooks/pre_commit
+
+version: 2
+
+# Paths to exclude from secret scanning
+paths-ignore:
+  - "**/*.md"
+  - "**/*.example"
+  - "**/README*.md"
+  - "**/GITHUB-SECRETS.md"
+  - "**/*.properties.example"
+  - "docker-compose.yml"  # Contains only local dev credentials
+
+# Matches to ignore (specific patterns that are safe)
+matches-ignore:
+  - name: Local Development Credentials
+    match: "postgres/postgres"
+  - name: Local Admin Credentials
+    match: "admin@studyhelper.com"
+  - name: Placeholder Passwords
+    match: "\\[YOUR_.*_HERE\\]"
+  - name: Example Passwords
+    match: "sua_senha_.*"
+  - name: Example Database URLs
+    match: "db\\.xxx\\.supabase\\.co"
+  - name: Example Database URLs
+    match: "db\\.yyy\\.supabase\\.co"
+
