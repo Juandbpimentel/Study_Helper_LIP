@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "echo 'No tests configured yet. TODO' && exit 0",
+    "test:watch": "echo 'No tests configured yet. TODO' && exit 0",
+    "test:coverage": "echo 'No tests configured yet. TODO' && exit 0"
   },
   "dependencies": {
     "react": "19.1.0",
