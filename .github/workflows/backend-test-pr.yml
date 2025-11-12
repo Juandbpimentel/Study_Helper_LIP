@@ -32,25 +32,13 @@ jobs:
             - name: Make gradlew executable
               run: chmod +x gradlew
 
-            - name: Install Backend Dependencies
-              run: ./gradlew build -x test
+            - name: Run Unit Tests
+              run: ./gradlew test
 
-            - name: Run Database Migrations
-              env:
-                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
-                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
-                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
-              run: ./gradlew flywayMigrate
+            - name: Run Integration Tests (Testcontainers)
+              run: ./gradlew integrationTest
 
-            - name: Run All Tests (Unit + Integration)
-              env:
-                  SPRING_PROFILES_ACTIVE: dev
-                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_DEV }}
-                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_DEV }}
-                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_DEV }}
-              run: ./gradlew test integrationTest
-
-            - name: Run Backend Code Quality Check
+            - name: Run Code Quality Check
               run: ./gradlew check
 
     test-backend-prod:
@@ -77,25 +65,13 @@ jobs:
             - name: Make gradlew executable
               run: chmod +x gradlew
 
-            - name: Install Backend Dependencies
-              run: ./gradlew build -x test
+            - name: Run Unit Tests
+              run: ./gradlew test
 
-            - name: Run Database Migrations
-              env:
-                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
-                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
-                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
-              run: ./gradlew flywayMigrate
+            - name: Run Integration Tests (Testcontainers)
+              run: ./gradlew integrationTest
 
-            - name: Run All Tests (Unit + Integration)
-              env:
-                  SPRING_PROFILES_ACTIVE: test
-                  SPRING_DATASOURCE_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
-                  SPRING_DATASOURCE_USERNAME: ${{ secrets.SUPABASE_DB_USER_PROD }}
-                  SPRING_DATASOURCE_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
-              run: ./gradlew test integrationTest
-
-            - name: Run Backend Code Quality Check
+            - name: Run Code Quality Check
               run: ./gradlew check
 
             - name: Test Coverage Report

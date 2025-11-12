@@ -1,44 +1,21 @@
 package com.studyhelper.backend;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.flywaydb.core.Flyway;
 
-@SpringBootTest
-@Testcontainers
-@ActiveProfiles("integration-test")
-class StudyHelperApplicationTests {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withDatabaseName("studyhelper_test")
-        .withUsername("test_user")
-        .withPassword("test_password")
-        .withReuse(false);
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-
-        // Apply Flyway migrations to the container DB before Spring/Hibernate validates the schema
-        Flyway.configure()
-            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)
-            .load()
-            .migrate();
-    }
+/**
+ * Teste de contexto da aplicação.
+ * 
+ * Verifica se o Spring Boot consegue inicializar corretamente
+ * com todas as configurações e migrations aplicadas.
+ * 
+ * Estende BaseIntegrationTest para configuração automática.
+ */
+class StudyHelperApplicationTests extends BaseIntegrationTest {
 
     @Test
     void contextLoads() {
+        // Se o contexto Spring inicializar sem erros, o teste passa
+        // Isso valida: configurações, beans, Flyway migrations, etc.
     }
 
 }

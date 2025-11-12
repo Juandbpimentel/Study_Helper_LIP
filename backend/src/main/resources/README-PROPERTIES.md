@@ -1,265 +1,98 @@
-# Guia de Configuração - Application Properties
+# Configuração do Backend - Study Helper
 
-## 📋 Índice
-- [Visão Geral](#visão-geral)
-- [Arquivos de Configuração](#arquivos-de-configuração)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Como Usar](#como-usar)
+## 🎯 Filosofia Simplificada
 
----
+**Você NÃO precisa se preocupar com múltiplos ambientes!**
 
-## 🎯 Visão Geral
-
-Este projeto utiliza o sistema de profiles do Spring Boot para gerenciar diferentes ambientes:
-- **Default**: Configurações básicas
-- **DEV**: Desenvolvimento local
-- **PROD**: Produção
-- **TEST**: CI/CD (GitHub Actions)
-
----
+- Para **desenvolvimento local**: apenas rode `./gradlew bootRun` 🚀
+- Para **CI/CD e produção**: os workflows do GitHub Actions cuidam de tudo 🤖
 
 ## 📁 Arquivos de Configuração
 
-### Estrutura de Diretórios
+### `application.properties` (Principal)
+- Único arquivo de configuração que você precisa
+- Valores padrão funcionam para desenvolvimento local
+- CI/CD injeta variáveis de ambiente conforme necessário
 
-```
-backend/src/
-├── main/resources/
-│   ├── application.properties                    # Configuração padrão
-│   ├── application.properties.example            # Template da configuração padrão
-│   ├── application-dev.properties.example        # Template para DEV
-│   ├── application-prod.properties.example       # Template para PROD
-│   └── application-test.properties.example       # Template para TEST
-├── test/resources/
-│   └── application-test.properties               # Testes unitários (H2)
-└── integrationTest/resources/
-    └── application-integration-test.properties   # Testes de integração (PostgreSQL + Testcontainers)
-```
+### `application-test.properties` (Testes Unitários)
+- Usado automaticamente pelos testes unitários
+- Usa H2 in-memory (super rápido)
+- Você não precisa mexer neste arquivo
 
-### 📄 application.properties
-**Quando usar**: Desenvolvimento local básico sem profile específico
-
-**Características**:
-- ✅ Configurações padrão da aplicação
-- ✅ Suporta variáveis de ambiente com valores default
-- ✅ PostgreSQL como banco de dados
-- ✅ Flyway habilitado
-
-### 🔧 application-dev.properties
-**Quando usar**: `SPRING_PROFILES_ACTIVE=dev`
-
-**Características**:
-- ✅ Debug habilitado
-- ✅ SQL visível nos logs
-- ✅ DevTools ativo (hot reload)
-- ✅ CORS liberado para localhost:3000
-- ✅ Logs em nível DEBUG
-
-### 🚀 application-prod.properties
-**Quando usar**: `SPRING_PROFILES_ACTIVE=prod`
-
-**Características**:
-- ✅ Debug desabilitado
-- ✅ SQL oculto nos logs
-- ✅ SSL habilitado
-- ✅ Connection pool otimizado
-- ✅ Logs em nível WARN/INFO
-- ⚠️ **TODAS as credenciais via variáveis de ambiente**
-
-### 🧪 application-test.properties
-**Quando usar**: `SPRING_PROFILES_ACTIVE=test`
-
-**Características**:
-- ✅ PostgreSQL real (CI/CD)
-- ✅ Flyway habilitado
-- ✅ Usado pelo GitHub Actions
-- ✅ Logs em nível INFO/DEBUG
-
-### ⚡ application-test.properties (test/resources)
-**Quando usar**: Testes unitários automáticos
-
-**Características**:
-- ✅ H2 in-memory (muito rápido)
-- ✅ Flyway desabilitado
-- ✅ Schema criado automaticamente pelo Hibernate
-- ✅ Isolamento total entre testes
-
-### 🐢 application-integration-test.properties
-**Quando usar**: Testes de integração locais
-
-**Características**:
-- ✅ PostgreSQL via Testcontainers
-- ✅ Flyway habilitado
-- ✅ Testa migrations reais
-- ✅ Ambiente idêntico à produção
-
----
-
-## 🔐 Variáveis de Ambiente
-
-### Padrão de Nomenclatura
-
-**✅ PADRÃO (usar sempre)**:
-```bash
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/studyhelper
-SPRING_DATASOURCE_USERNAME=postgres
-SPRING_DATASOURCE_PASSWORD=senha123
-JWT_SECRET=my-super-secret-key-256-bits
-JWT_EXPIRATION=86400000
-ALLOWED_ORIGINS=http://localhost:3000,https://studyhelper.com
-SERVER_PORT=8080
-```
-
-**❌ NÃO USAR** (antigo):
-```bash
-DATABASE_URL_DEV=...
-DB_USERNAME_DEV=...
-DB_PASSWORD_DEV=...
-```
-
-### Variáveis Obrigatórias
-
-#### Para DEV:
-```bash
-SPRING_DATASOURCE_URL (opcional, usa default)
-SPRING_DATASOURCE_USERNAME (opcional, usa default)
-SPRING_DATASOURCE_PASSWORD (opcional, usa default)
-JWT_SECRET (opcional, usa default)
-```
-
-#### Para PROD:
-```bash
-SPRING_DATASOURCE_URL (OBRIGATÓRIO)
-SPRING_DATASOURCE_USERNAME (OBRIGATÓRIO)
-SPRING_DATASOURCE_PASSWORD (OBRIGATÓRIO)
-JWT_SECRET (OBRIGATÓRIO)
-JWT_EXPIRATION (opcional, padrão: 24h)
-ALLOWED_ORIGINS (opcional, padrão: https://studyhelper.com)
-SSL_ENABLED (opcional, padrão: false)
-```
-
-#### Para TEST (CI/CD):
-```bash
-SPRING_DATASOURCE_URL (definido no workflow)
-SPRING_DATASOURCE_USERNAME (definido no workflow)
-SPRING_DATASOURCE_PASSWORD (definido no workflow)
-```
-
----
+### `application-integration-test.properties` (Testes de Integração)
+- Usado pelos testes de integração
+- Usa PostgreSQL via Testcontainers
+- Você não precisa mexer neste arquivo
 
 ## 🚀 Como Usar
 
-### 1. Setup Inicial
+### Desenvolvimento Local
 
-#### Passo 1: Copiar arquivos de exemplo
+1. **Suba o banco de dados (Docker Compose)**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Execute a aplicação**
+   ```bash
+   ./gradlew bootRun
+   ```
+
+3. **Pronto!** 🎉
+   - API: http://localhost:8080
+   - PgAdmin: http://localhost:5050
+
+### Executar Testes
+
 ```bash
-# No diretório backend/src/main/resources/
-cp application.properties.example application.properties
-cp application-dev.properties.example application-dev.properties
-cp application-prod.properties.example application-prod.properties
-cp application-test.properties.example application-test.properties
-```
-
-#### Passo 2: Configurar valores
-Edite os arquivos copiados com suas credenciais reais.
-
-⚠️ **IMPORTANTE**: Nunca commite arquivos com credenciais reais!
-
-### 2. Executando a Aplicação
-
-#### Desenvolvimento Local (DEV)
-```bash
-# Opção 1: Via variável de ambiente
-export SPRING_PROFILES_ACTIVE=dev
-./gradlew bootRun
-
-# Opção 2: Via argumento
-./gradlew bootRun --args='--spring.profiles.active=dev'
-
-# Opção 3: Via IDE (IntelliJ/Eclipse)
-# Configure: Run > Edit Configurations > Environment Variables
-# Adicione: SPRING_PROFILES_ACTIVE=dev
-```
-
-#### Produção (PROD)
-```bash
-# Com variáveis de ambiente
-export SPRING_PROFILES_ACTIVE=prod
-export SPRING_DATASOURCE_URL=jdbc:postgresql://prod-db:5432/studyhelper
-export SPRING_DATASOURCE_USERNAME=prod_user
-export SPRING_DATASOURCE_PASSWORD=super_secret_password
-export JWT_SECRET=$(openssl rand -base64 32)
-
-./gradlew bootRun
-```
-
-#### CI/CD (TEST)
-O profile `test` é ativado automaticamente pelos workflows do GitHub Actions.
-
-### 3. Executando Testes
-
-#### Testes Unitários (H2 in-memory)
-```bash
+# Testes unitários (rápido)
 ./gradlew test
-```
-- Usa: `src/test/resources/application-test.properties`
-- Banco: H2 in-memory
-- Velocidade: ⚡ Muito rápido
 
-#### Testes de Integração (PostgreSQL + Testcontainers)
-```bash
+# Testes de integração (mais lento)
 ./gradlew integrationTest
-```
-- Usa: `src/integrationTest/resources/application-integration-test.properties`
-- Banco: PostgreSQL via Testcontainers
-- Velocidade: 🐢 Mais lento (mas testa ambiente real)
 
-#### Todos os Testes
-```bash
+# Todos os testes
 ./gradlew test integrationTest
 ```
 
----
+## 🔧 Personalização (Opcional)
 
-## 🔍 Troubleshooting
+Se você precisar customizar alguma configuração local:
 
-### Problema: "Could not connect to database"
-**Solução**: Verifique se as variáveis de ambiente estão definidas corretamente.
+1. Copie o arquivo `.env.example` para `.env`
+   ```bash
+   cp .env.example .env
+   ```
 
-```bash
-# Verificar variáveis
-echo $SPRING_DATASOURCE_URL
-echo $SPRING_DATASOURCE_USERNAME
+2. Edite o `.env` com seus valores personalizados
 
-# Testar conexão com PostgreSQL
-psql -h localhost -p 5432 -U your_username -d studyhelper
-```
+3. As variáveis do `.env` sobrescrevem os padrões
 
-### Problema: "Invalid JWT secret"
-**Solução**: O JWT secret deve ter no mínimo 256 bits (32 caracteres).
+## 🤖 CI/CD
 
-```bash
-# Gerar um novo secret
-openssl rand -base64 32
-```
+Os workflows em `.github/workflows/` cuidam de:
+- ✅ Executar testes automaticamente
+- ✅ Injetar credenciais de banco (DEV/PROD)
+- ✅ Build e deploy
 
-### Problema: "Flyway migration failed"
-**Solução**: Execute as migrations manualmente:
+**Você não precisa configurar nada!** Os secrets estão no GitHub.
 
-```bash
-./gradlew flywayMigrate
-```
+## ❓ FAQ
 
----
+**P: Preciso criar arquivos application-dev.properties, application-prod.properties?**  
+R: **NÃO!** O CI/CD injeta as variáveis de ambiente necessárias.
+
+**P: Como o CI/CD sabe qual banco usar?**  
+R: Via secrets do GitHub (`SUPABASE_DB_URL_DEV`, `SUPABASE_DB_URL_PROD`).
+
+**P: E se eu quiser testar com outro banco localmente?**  
+R: Configure no `.env` (veja seção Personalização).
+
+**P: Posso deletar os arquivos .env.*.example?**  
+R: Já foram deletados! Agora temos apenas um `.env.example` simples.
 
 ## 📚 Referências
 
-- [Spring Boot Profiles](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.profiles)
-- [Spring Boot Configuration Properties](https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html)
-- [Flyway Documentation](https://flywaydb.org/documentation/)
+- [Spring Boot Configuration](https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html)
+- [Flyway Migrations](https://flywaydb.org/documentation/)
 - [Testcontainers](https://testcontainers.com/)
-
----
-
-**Última atualização**: 11/11/2025
-**Autor**: Juandbpimentel

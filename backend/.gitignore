@@ -31,18 +31,9 @@ Thumbs.db
 *.ear
 target/
 
-# Environment Variables
+# Environment Variables (apenas .env local)
 .env
 .env.local
-.env.dev
-.env.prod
-.env.test
-*.env
-
-# Application Properties (com credenciais reais)
-src/main/resources/application-dev.properties
-src/main/resources/application-prod.properties
-src/main/resources/application-test.properties
 
 # Docker
 docker-compose.override.yml

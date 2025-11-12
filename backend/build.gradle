@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.2.0'
-    id 'io.spring.dependency-management' version '1.1.4'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
     id 'idea'
     id 'co.uzzu.dotenv.gradle' version '4.0.0'
@@ -11,7 +11,9 @@ group = 'com.studyhelper'
 version = '0.0.1-SNAPSHOT'
 
 java {
-    sourceCompatibility = '21'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 configurations {
@@ -27,11 +29,15 @@ repositories {
 // ========================================
 // Load .env file
 // ========================================
-// Automatically loads .env file if it exists
-// Priority: .env > System Environment Variables
+// Automatically loads .env file if it exists (optional for local dev)
+// Priority: System Environment Variables > .env
+// CI/CD não precisa de .env (usa secrets do GitHub)
 env {
-    // Load .env file if exists
-    file = file('.env')
+    // Load .env file apenas se existir (não obrigatório)
+    def envFile = file('.env')
+    if (envFile.exists()) {
+        file = envFile
+    }
 }
 
 // ========================================
@@ -87,7 +93,8 @@ dependencies {
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
     testImplementation 'org.assertj:assertj-core'
-    
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
     // ========================================
     // Testing - Unit Tests (H2 In-Memory)
     // ========================================
@@ -110,6 +117,7 @@ dependencies {
     integrationTestImplementation 'org.testcontainers:postgresql'
     integrationTestImplementation 'org.flywaydb:flyway-core'
     integrationTestImplementation 'org.assertj:assertj-core'
+    integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 // ========================================

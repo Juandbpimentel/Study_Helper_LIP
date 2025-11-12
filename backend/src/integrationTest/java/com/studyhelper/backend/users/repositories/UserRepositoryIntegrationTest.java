@@ -1,56 +1,28 @@
 package com.studyhelper.backend.users.repositories;
 
+import com.studyhelper.backend.BaseIntegrationTest;
 import com.studyhelper.backend.users.models.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.flywaydb.core.Flyway;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@ExtendWith(SpringExtension.class)
-@DataJpaTest
-@Testcontainers
-@ActiveProfiles("integration-test")
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+/**
+ * Testes de integração para UserRepository.
+ * 
+ * Estende BaseIntegrationTest para configuração automática de:
+ * - PostgreSQL 16 via Testcontainers
+ * - Flyway migrations
+ */
+@Transactional
 @DisplayName("User Repository Integration Tests")
-public class UserRepositoryIntegrationTest {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withDatabaseName("studyhelper_test")
-        .withUsername("test_user")
-        .withPassword("test_password")
-        .withReuse(false);
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-
-        // Ensure Flyway migrations are executed against the Testcontainers DB before Spring/Hibernate starts
-        Flyway.configure()
-            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)
-            .load()
-            .migrate();
-    }
+public class UserRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
