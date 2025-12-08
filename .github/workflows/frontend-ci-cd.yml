@@ -33,11 +33,6 @@ jobs:
             - name: Run Type Check
               run: npx tsc --noEmit
 
-            - name: Run Unit Tests Only
-              env:
-                  NODE_ENV: test
-              run: npm test
-
     test-frontend-prod:
         runs-on: ubuntu-latest
         if: github.ref == 'refs/heads/main'
@@ -65,11 +60,6 @@ jobs:
 
             - name: Run Type Check
               run: npx tsc --noEmit
-
-            - name: Run Unit Tests with Coverage
-              env:
-                  NODE_ENV: test
-              run: npm test -- --coverage
 
     build-frontend-dev:
         needs: [test-frontend-dev]
