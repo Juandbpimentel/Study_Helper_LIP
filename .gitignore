@@ -3,12 +3,23 @@
 Thumbs.db
 
 # IDE
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Temporary files
+# Tutorials (local only)
+*_TUTORIAL.md
+SECRETS_TUTORIAL.md
+secretsEEnvsProjeto.env
+
+
+# dependencies
 *.tmp
 *.log

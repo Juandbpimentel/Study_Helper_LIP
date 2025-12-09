@@ -1,97 +1,76 @@
-# Backend - Study Helper 🚀
+# Study Helper - Backend
 
-API REST com Spring Boot 3 e Java 21.
+Backend da aplicação Study Helper, desenvolvido com **NestJS** e **Node.js 24**.
 
-## Quick Start
+## 🛠️ Tecnologias
 
-```bash
-docker-compose up -d
-./gradlew bootRun
+-   **Framework:** [NestJS](https://nestjs.com/)
+-   **Linguagem:** [TypeScript](https://www.typescriptlang.org/)
+-   **Runtime:** [Node.js 24](https://nodejs.org/)
+-   **Banco de Dados:** PostgreSQL
+-   **ORM:** [Prisma](https://www.prisma.io/)
+-   **Infraestrutura:** Docker (Banco de Dados local), Render (Deploy)
+
+## 📁 Estrutura do Projeto
+
+```
+src/
+├── app.module.ts        # Módulo raiz
+├── main.ts              # Ponto de entrada (Porta 8080)
+├── prisma/              # Configuração e serviço do Prisma
+│   ├── prisma.module.ts
+│   └── prisma.service.ts
+└── users/               # Módulo de Usuários (CRUD)
+    ├── dto/             # Data Transfer Objects
+    ├── users.controller.ts
+    ├── users.module.ts
+    └── users.service.ts
 ```
 
-**Acesso:** http://localhost:8080
+## 🚀 Como Rodar
 
-## Estrutura
+### Pré-requisitos
+-   Node.js 24+
+-   Docker & Docker Compose
 
-```
-backend/
-├── src/main/
-│   ├── java/com/studyhelper/backend/
-│   │   └── users/               # Módulo de usuários
-│   └── resources/
-│       ├── application.properties
-│       └── db/migration/        # Flyway migrations
-├── src/test/                    # Testes unitários (H2)
-├── src/integrationTest/         # Testes de integração (PostgreSQL)
-└── docker-compose.yml           # PostgreSQL + PgAdmin
-```
+### Passo a Passo
 
-## Comandos
+1.  **Configurar Variáveis de Ambiente:**
+    Crie um arquivo `.env` na raiz do diretório `backend`:
+    ```env
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studyhelper?schema=public"
+    PORT=8080
+    ```
 
-```bash
-# Desenvolvimento
-./gradlew bootRun
+2.  **Iniciar o Banco de Dados:**
+    ```bash
+    docker-compose up -d
+    ```
 
-# Testes
-./gradlew test                   # Unitários (rápido)
-./gradlew integrationTest        # Integração (completo)
+3.  **Instalar Dependências:**
+    ```bash
+    npm install
+    ```
 
-# Database
-docker-compose up -d             # Iniciar
-docker-compose down -v           # Limpar
-./gradlew flywayMigrate          # Aplicar migrations
+4.  **Rodar Migrations:**
+    ```bash
+    npx prisma migrate dev
+    ```
 
-# Build
-./gradlew build
-./gradlew clean build
-```
+5.  **Iniciar o Servidor:**
+    ```bash
+    npm run start:dev
+    ```
+    A API estará disponível em: `http://localhost:8080`
 
-## Database (Local Development)
+## 🧪 Testes e Qualidade
 
-**PostgreSQL:** `localhost:5432`
-- Database: `studyhelper`
-- User: `[configured in docker-compose.yml]`
-- Password: `[configured in docker-compose.yml]`
+-   **Linting:** `npm run lint`
+-   **Build:** `npm run build`
+-   **CI/CD:** Pipelines configurados no GitHub Actions para validação de Pull Requests e Deploy automático.
 
-**PgAdmin:** http://localhost:5050
-- Email: `[configured in docker-compose.yml]`
-- Password: `[configured in docker-compose.yml]`
+## 🔒 Segurança e Migrations
 
-> 🔒 **Segurança**: As credenciais locais estão no `docker-compose.yml`. 
-> Para produção, use variáveis de ambiente e nunca commite credenciais reais!
-
-## Tecnologias
-
-- Java 21 LTS
-- Spring Boot 3.2
-- PostgreSQL 16
-- Flyway (migrations)
-- JUnit 5 + Testcontainers
-- Gradle 8.5+
-
-## CI/CD
-
-Workflows automáticos em `.github/workflows/`:
-- ✅ Testes em PRs
-- ✅ Deploy em `dev` e `main`
-- ✅ Migrations no Supabase
-
-**Secrets:** Configurados no GitHub (veja [GITHUB-SECRETS.md](GITHUB-SECRETS.md))
-
-## Troubleshooting
-
-```bash
-# Banco não conecta
-docker-compose restart
-
-# Porta 8080 ocupada
-netstat -ano | findstr :8080
-
-# Limpar cache
-./gradlew clean --refresh-dependencies
-```
-
-## Docs
-
-- [README-PROPERTIES.md](src/main/resources/README-PROPERTIES.md) - Configurações
-- [GITHUB-SECRETS.md](GITHUB-SECRETS.md) - Setup CI/CD
+-   Nunca edite `schema.prisma` ou arquivos SQL manualmente sem gerar migrations.
+-   Use `npx prisma migrate dev` para sincronizar mudanças locais.
+-   Em caso de conflito, use `npx prisma migrate reset` (cuidado com dados locais).
