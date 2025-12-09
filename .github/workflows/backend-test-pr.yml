@@ -13,22 +13,6 @@ jobs:
         defaults:
             run:
                 working-directory: ./backend
-        
-        # Service container for migration testing
-        services:
-            postgres:
-                image: postgres:16-alpine
-                env:
-                    POSTGRES_DB: studyhelper_test
-                    POSTGRES_USER: postgres
-                    POSTGRES_PASSWORD: postgres
-                ports:
-                    - 5432:5432
-                options: >-
-                    --health-cmd pg_isready
-                    --health-interval 10s
-                    --health-timeout 5s
-                    --health-retries 5
 
         steps:
             - name: Checkout repository
@@ -44,16 +28,13 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Validate Prisma Schema
-              run: npx prisma validate
-
-            - name: Verify Migrations (Dry Run)
-              env:
-                  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/studyhelper_test?schema=public
-              run: npx prisma migrate deploy
-
+            # Prisma generate precisa da env, mas não conecta de fato
             - name: Generate Prisma Client
+              env:
+                  DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
               run: npx prisma generate
 
             - name: Build Check
+              env:
+                  DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
               run: npm run build

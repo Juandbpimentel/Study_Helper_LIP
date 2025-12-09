@@ -1,61 +1,65 @@
 name: Backend CI/CD Pipeline
 
 on:
-    push:
-        branches: [main, dev]
-        paths:
-            - 'backend/**'
+  push:
+    branches: [main, dev]
+    paths:
+      - "backend/**"
 
 jobs:
-    build-backend:
-        runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: ./backend
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  build-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: '24'
-                  cache: 'npm'
-                  cache-dependency-path: backend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-            - name: Generate Prisma Client
-              run: npx prisma generate
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
+        run: npx prisma generate
 
-            - name: Build
-              run: npm run build
+      - name: Build
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
+        run: npm run build
 
-    deploy-backend-dev:
-        needs: [build-backend]
-        runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/dev'
-        environment:
-            name: development
-            url: ${{ secrets.DEV_APP_URL }}
-        steps:
-            - name: Trigger Backend DEV Deploy
-              run: |
-                  curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
-                    -H "Content-Type: application/json" \
-                    -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
+  deploy-backend-dev:
+    needs: [build-backend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+    environment:
+      name: development
+      url: ${{ secrets.DEV_APP_URL }}
+    steps:
+      - name: Trigger Backend DEV Deploy
+        run: |
+          curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
+            -H "Content-Type: application/json" \
+            -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
 
-    deploy-backend-prod:
-        needs: [build-backend]
-        runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/main'
-        environment:
-            name: production
-            url: ${{ secrets.PROD_APP_URL }}
-        steps:
-            - name: Trigger Backend PROD Deploy
-              run: |
-                  curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_PROD }}" \
-                    -H "Content-Type: application/json" \
-                    -d '{"environment": "prod", "version": "${{ github.sha }}", "branch": "main"}'
+  deploy-backend-prod:
+    needs: [build-backend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: ${{ secrets.PROD_APP_URL }}
+    steps:
+      - name: Trigger Backend PROD Deploy
+        run: |
+          curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_PROD }}" \
+            -H "Content-Type: application/json" \
+            -d '{"environment": "prod", "version": "${{ github.sha }}", "branch": "main"}'
