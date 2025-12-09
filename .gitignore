@@ -17,6 +17,8 @@ Thumbs.db
 # Tutorials (local only)
 *_TUTORIAL.md
 SECRETS_TUTORIAL.md
+secretsEEnvsProjeto.env
+
 
 # dependencies
 *.tmp
