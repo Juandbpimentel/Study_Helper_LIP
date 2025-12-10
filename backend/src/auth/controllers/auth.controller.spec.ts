@@ -214,7 +214,11 @@ describe('AuthController', () => {
       responseMock as unknown as Response,
     );
 
-    expect(changeEmailMock).toHaveBeenCalledWith(user.id, body.novoEmail);
+    expect(changeEmailMock).toHaveBeenCalledWith(
+      user.id,
+      body.novoEmail,
+      body.senha,
+    );
     expect(loginFromGuardMock).toHaveBeenCalledWith(updatedUser);
     expect(cookieMock).toHaveBeenCalledWith(
       AUTH_COOKIE_NAME,

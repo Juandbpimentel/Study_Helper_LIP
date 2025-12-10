@@ -9,6 +9,11 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
+jest.mock('crypto', () => ({
+  ...jest.requireActual('crypto'),
+  randomUUID: jest.fn(),
+}));
+
 describe('UsersService', () => {
   let service: UsersService;
   let prismaMock: {
@@ -50,6 +55,7 @@ describe('UsersService', () => {
 
     jest.spyOn(bcrypt, 'compare').mockReset();
     jest.spyOn(bcrypt, 'hash').mockReset();
+    (crypto.randomUUID as jest.Mock).mockReset();
   });
 
   describe('changePassword', () => {
@@ -57,7 +63,7 @@ describe('UsersService', () => {
       prismaMock.usuario.findUnique.mockResolvedValue(baseUser);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-new');
       const mockUUIDV2 = '00000000-0000-0000-0000-000000000002';
-      jest.spyOn(crypto, 'randomUUID').mockReturnValue(mockUUIDV2);
+      (crypto.randomUUID as jest.Mock).mockReturnValue(mockUUIDV2);
 
       const updated: Usuario = {
         ...baseUser,
@@ -100,7 +106,7 @@ describe('UsersService', () => {
   describe('changeEmail', () => {
     it('should update email and rotate versaoToken on success', async () => {
       const mockUUIDV3 = '00000000-0000-0000-0000-000000000003';
-      jest.spyOn(crypto, 'randomUUID').mockReturnValue(mockUUIDV3);
+      (crypto.randomUUID as jest.Mock).mockReturnValue(mockUUIDV3);
       const updated: Usuario = {
         ...baseUser,
         email: 'new@example.com',
