@@ -9,6 +9,13 @@ on:
 jobs:
   build-backend:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+      NODE_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
     defaults:
       run:
         working-directory: ./backend
@@ -27,13 +34,9 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
         run: npx prisma generate
 
       - name: Build
-        env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
         run: npm run build
 
   deploy-backend-dev:
@@ -42,21 +45,22 @@ jobs:
     if: github.ref == 'refs/heads/dev'
     environment:
       name: development
-      url: ${{ secrets.DEV_APP_URL }}
+    env:
+      APP_URL: ${{ secrets.DEV_APP_URL }}
     steps:
       - name: Trigger Backend DEV Deploy
         run: |
           curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
             -H "Content-Type: application/json" \
             -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
-
   deploy-backend-prod:
     needs: [build-backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: ${{ secrets.PROD_APP_URL }}
+    env:
+      APP_URL: ${{ secrets.PROD_APP_URL }}
     steps:
       - name: Trigger Backend PROD Deploy
         run: |
