@@ -23,7 +23,7 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  const port = process.env.PORT ?? 8080;
+  const port = process.env.PORT || 8080;
 
   const config = new DocumentBuilder()
     .setTitle('Study Helper API')
