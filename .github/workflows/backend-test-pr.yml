@@ -1,40 +1,46 @@
 name: Backend PR Check
 
 on:
-    pull_request:
-        branches: [main, dev]
-        paths:
-            - 'backend/**'
-            - '.github/workflows/backend-test-pr.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-test-pr.yml"
 
 jobs:
-    build-check:
-        runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: ./backend
+  build-check:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+    defaults:
+      run:
+        working-directory: ./backend
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: '24'
-                  cache: 'npm'
-                  cache-dependency-path: backend/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-            # Prisma generate precisa da env, mas não conecta de fato
-            - name: Generate Prisma Client
-              env:
-                  DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
-              run: npx prisma generate
+      - name: Generate Prisma Client
+        run: npx prisma generate
 
-            - name: Build Check
-              env:
-                  DATABASE_URL: postgresql://user:pass@localhost:5432/dummy?schema=public
-              run: npm run build
+      - name: Check Migrations Status
+        run: npx prisma migrate status
+
+      - name: Build Check
+        run: npm run build
+
+      - name: Run Tests
+        run: npm test

@@ -36,8 +36,14 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Check Migrations Status
+        run: npx prisma migrate status
+
       - name: Build
         run: npm run build
+
+      - name: Run Tests
+        run: npm test
 
   deploy-backend-dev:
     needs: [build-backend]
@@ -45,8 +51,6 @@ jobs:
     if: github.ref == 'refs/heads/dev'
     environment:
       name: development
-    env:
-      APP_URL: ${{ secrets.DEV_APP_URL }}
     steps:
       - name: Trigger Backend DEV Deploy
         run: |
@@ -59,8 +63,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment:
       name: production
-    env:
-      APP_URL: ${{ secrets.PROD_APP_URL }}
     steps:
       - name: Trigger Backend PROD Deploy
         run: |
