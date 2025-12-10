@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppProvider } from "@/context/app-context";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "Study Helper",
@@ -13,8 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased">
-        {children}
+      <body className="antialiased" suppressHydrationWarning>
+        <AppProvider>
+          <AppShell>{children}</AppShell>
+        </AppProvider>
       </body>
     </html>
   );

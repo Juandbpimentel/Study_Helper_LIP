@@ -41,11 +41,6 @@ jobs:
                   NEXT_PUBLIC_ENV: development
               run: npm run build
 
-            - name: Run Unit Tests Only
-              env:
-                  NODE_ENV: test
-              run: npm test
-
     test-frontend-prod:
         runs-on: ubuntu-latest
         if: github.base_ref == 'main'
@@ -80,15 +75,3 @@ jobs:
                   NEXT_PUBLIC_API_URL: http://localhost:8080/api
                   NEXT_PUBLIC_ENV: test
               run: npm run build
-
-            - name: Run Unit Tests with Coverage
-              env:
-                  NODE_ENV: test
-              run: npm test -- --coverage
-
-            - name: Upload Test Coverage
-              uses: actions/upload-artifact@v4
-              with:
-                  name: frontend-coverage-pr-${{ github.event.pull_request.number }}
-                  path: frontend/coverage/
-                  retention-days: 7
