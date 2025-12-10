@@ -5,6 +5,7 @@ on:
     branches: [main, dev]
     paths:
       - "backend/**"
+      - ".github/workflows/backend-ci-cd.yml"
 
 jobs:
   build-backend:
@@ -37,6 +38,9 @@ jobs:
         run: npx prisma generate
 
       - name: Check Migrations Status
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
         run: npx prisma migrate status
 
       - name: Build

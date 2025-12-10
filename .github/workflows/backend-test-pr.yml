@@ -10,6 +10,7 @@ on:
 jobs:
   build-check:
     runs-on: ubuntu-latest
+    environment: ${{ github.base_ref == 'main' && 'production' || 'development' }}
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DIRECT_URL }}
@@ -37,6 +38,9 @@ jobs:
         run: npx prisma generate
 
       - name: Check Migrations Status
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
         run: npx prisma migrate status
 
       - name: Build Check
