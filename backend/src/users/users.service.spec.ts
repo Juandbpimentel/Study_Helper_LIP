@@ -19,6 +19,7 @@ describe('UsersService', () => {
   let prismaMock: {
     usuario: {
       findUnique: jest.Mock;
+      findFirst: jest.Mock;
       update: jest.Mock;
       create: jest.Mock;
       findMany: jest.Mock;
@@ -31,6 +32,7 @@ describe('UsersService', () => {
     prismaMock = {
       usuario: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
         findMany: jest.fn(),
@@ -61,6 +63,8 @@ describe('UsersService', () => {
   describe('changePassword', () => {
     it('should update password and rotate versaoToken on success', async () => {
       prismaMock.usuario.findUnique.mockResolvedValue(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true); // senha antiga válida
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false); // nova senha diferente
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-new');
       const mockUUIDV2 = '00000000-0000-0000-0000-000000000002';
       (crypto.randomUUID as jest.Mock).mockReturnValue(mockUUIDV2);
@@ -105,6 +109,9 @@ describe('UsersService', () => {
   });
   describe('changeEmail', () => {
     it('should update email and rotate versaoToken on success', async () => {
+      prismaMock.usuario.findUnique.mockResolvedValue(baseUser);
+      prismaMock.usuario.findFirst.mockResolvedValue(null); // email não em uso
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true); // senha válida
       const mockUUIDV3 = '00000000-0000-0000-0000-000000000003';
       (crypto.randomUUID as jest.Mock).mockReturnValue(mockUUIDV3);
       const updated: Usuario = {
@@ -114,8 +121,13 @@ describe('UsersService', () => {
       };
       prismaMock.usuario.update.mockResolvedValue(updated);
 
-      const result = await service.changeEmail(baseUser.id, 'new@example.com');
+      const result = await service.changeEmail(
+        baseUser.id,
+        'new@example.com',
+        'secret',
+      );
 
+      expect(bcrypt.compare).toHaveBeenCalledWith('secret', baseUser.senha);
       expect(prismaMock.usuario.update).toHaveBeenCalledWith({
         where: { id: baseUser.id },
         data: { email: 'new@example.com', versaoToken: mockUUIDV3 },
