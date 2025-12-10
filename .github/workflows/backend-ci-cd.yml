@@ -8,15 +8,16 @@ on:
       - ".github/workflows/backend-ci-cd.yml"
 
 jobs:
-  build-backend:
+  test-backend-dev:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    if: github.ref == 'refs/heads/dev'
+    environment: development
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DIRECT_URL: ${{ secrets.DIRECT_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-      NODE_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      NODE_ENV: development
     defaults:
       run:
         working-directory: ./backend
@@ -37,11 +38,67 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Check Migrations Status
+      - name: Check Migrations Status (DEV)
         env:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           PGSTATEMENTTIMEOUT: 30000
         run: npx prisma migrate status
+        continue-on-error: true
+
+      - name: Apply Migrations (DEV)
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
+        run: npx prisma migrate deploy
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Tests
+        run: npm test
+
+  test-backend-prod:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+      NODE_ENV: production
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Check Migrations Status (PROD)
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
+        run: npx prisma migrate status
+        continue-on-error: true
+
+      - name: Apply Migrations (PROD)
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
+        run: npx prisma migrate deploy
 
       - name: Build
         run: npm run build
@@ -50,9 +107,9 @@ jobs:
         run: npm test
 
   deploy-backend-dev:
-    needs: [build-backend]
+    needs: [test-backend-dev]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
     environment:
       name: development
     steps:
@@ -61,10 +118,11 @@ jobs:
           curl -X POST "${{ secrets.BACKEND_DEPLOY_HOOK_URL_DEV }}" \
             -H "Content-Type: application/json" \
             -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
+
   deploy-backend-prod:
-    needs: [build-backend]
+    needs: [test-backend-prod]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
     steps:
