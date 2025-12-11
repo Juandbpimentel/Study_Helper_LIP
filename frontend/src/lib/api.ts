@@ -31,15 +31,17 @@ class ApiClient {
           "/auth/change-email",
         ].some((path) => requestUrl.includes(path));
 
-        if (
-          status === 401 &&
-          !shouldSkipRedirect &&
-          typeof window !== "undefined" &&
-          !window.location.pathname.includes("/login") &&
-          !window.location.pathname.includes("/register")
-        ) {
-          // Token inválido/expirado - redireciona para login
-          window.location.href = "/login";
+        const currentPath =
+          typeof window !== "undefined" ? window.location.pathname : "";
+        const isAuthRoute =
+          currentPath.includes("/login") || currentPath.includes("/register");
+        const isHomeRoute = currentPath === "/";
+
+        if (status === 401 && !shouldSkipRedirect && currentPath) {
+          // Token inválido/expirado - redireciona para login, exceto em rotas públicas
+          if (!isAuthRoute && !isHomeRoute) {
+            window.location.href = "/login";
+          }
         }
 
         const message =
