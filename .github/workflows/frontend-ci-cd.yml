@@ -11,6 +11,8 @@ jobs:
   test-frontend-dev:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev'
+    environment:
+      name: development
     defaults:
       run:
         working-directory: ./frontend
@@ -28,13 +30,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Check required secrets (PROD)
-        run: |
-          if [ -z "${{ secrets.API_URL_PROD }}" ]; then echo "Missing secret: API_URL_PROD"; exit 1; fi
-          if [ -z "${{ secrets.NETLIFY_SITE_ID_PROD }}" ]; then echo "Missing secret: NETLIFY_SITE_ID_PROD"; exit 1; fi
-          if [ -z "${{ secrets.NETLIFY_AUTH_TOKEN_PROD }}" ]; then echo "Missing secret: NETLIFY_AUTH_TOKEN_PROD"; exit 1; fi
-
-      - name: Check required secrets (DEV)
+      - name: Check required secrets (development)
         run: |
           if [ -z "${{ secrets.API_URL_DEV }}" ]; then echo "Missing secret: API_URL_DEV"; exit 1; fi
           if [ -z "${{ secrets.NETLIFY_SITE_ID_DEV }}" ]; then echo "Missing secret: NETLIFY_SITE_ID_DEV"; exit 1; fi
@@ -53,6 +49,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
+    environment:
+      name: production
+
     defaults:
       run:
         working-directory: ./frontend
@@ -70,6 +69,12 @@ jobs:
 
       - name: Install Frontend Dependencies
         run: npm ci
+
+      - name: Check required secrets (production)
+        run: |
+          if [ -z "${{ secrets.API_URL_PROD }}" ]; then echo "Missing secret: API_URL_PROD"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_SITE_ID_PROD }}" ]; then echo "Missing secret: NETLIFY_SITE_ID_PROD"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_AUTH_TOKEN_PROD }}" ]; then echo "Missing secret: NETLIFY_AUTH_TOKEN_PROD"; exit 1; fi
 
       - name: Run Linter
         run: npm run lint
