@@ -12,7 +12,7 @@ import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { LocalAuthGuard } from '../guards/local-auth.guard';
 import { UsersService } from '@/users/users.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AUTH_COOKIE_NAME } from '../auth.constants';
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
@@ -50,14 +50,14 @@ export class AuthController {
   ) {
     const authResult = this.authService.loginFromGuard(req.user);
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = req.headers.origin;
+    const origin = req.get('origin');
     this.setCookie(res, token, origin);
     return { message: 'Login Realizado com Sucesso', ...authResult };
   }
 
   @Post('logout')
   logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const origin = req.headers.origin as string | undefined;
+    const origin = req.get('origin');
     const isCrossSite =
       typeof origin === 'string' && !origin.includes('localhost');
     res.clearCookie(AUTH_COOKIE_NAME, {
@@ -77,7 +77,7 @@ export class AuthController {
     const authResult = await this.authService.register(body);
 
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = req.headers.origin as string | undefined;
+    const origin = req.get('origin');
     this.setCookie(res, token, origin);
     return { message: 'Usuário registrado com sucesso', ...authResult };
   }
@@ -112,7 +112,7 @@ export class AuthController {
     );
     const authResult = this.authService.loginFromGuard(updated);
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = req.headers.origin;
+    const origin = req.get('origin');
     this.setCookie(res, token, origin);
     return { message: 'Senha alterada com sucesso', ...authResult };
   }
