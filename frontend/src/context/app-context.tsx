@@ -11,41 +11,18 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { authService, Usuario } from "@/lib/auth";
 
-export type ThemeMode = "light" | "dark";
-
 interface AppContextValue {
   user: Usuario | null;
   setUser: (u: Usuario | null) => void;
-  theme: ThemeMode;
-  toggleTheme: () => void;
-  logout: () => Promise<void>;
+  logout: (redirectToLogin?: boolean) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-function getInitialTheme(): ThemeMode {
-  if (typeof window === "undefined") return "light";
-  const stored = localStorage.getItem("theme");
-  if (stored === "dark" || stored === "light") return stored;
-  return "light";
-}
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const pathname = usePathname();
   const router = useRouter();
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("theme-dark", theme === "dark");
-    root.classList.toggle("theme-light", theme === "light");
-    // Optional: remove Tailwind dark class if present
-    root.classList.remove("dark");
-    if (typeof window !== "undefined") {
-      localStorage.setItem("theme", theme);
-    }
-  }, [theme]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,18 +54,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, pathname, router]);
 
-  const toggleTheme = () =>
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (redirectToLogin: boolean = true) => {
     await authService.logout();
     setUser(null);
-    router.push("/login");
+    if (redirectToLogin) {
+      router.push("/login");
+    }
   }, [router]);
 
   const value = useMemo(
-    () => ({ user, setUser, theme, toggleTheme, logout }),
-    [user, theme, logout]
+    () => ({ user, setUser, logout }),
+    [user, logout]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

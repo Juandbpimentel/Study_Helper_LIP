@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useAppContext } from "@/context/app-context";
 
 type BaseModalProps = {
   open: boolean;
@@ -18,15 +17,6 @@ export function BaseModal({
   children,
   footer,
 }: BaseModalProps) {
-  const { theme } = useAppContext();
-  const isDark = theme === "dark";
-  const overlayClass = isDark
-    ? "absolute inset-0 bg-black/70 backdrop-blur-sm"
-    : "absolute inset-0 bg-white/80 backdrop-blur-sm";
-  const cardClass = isDark
-    ? "bg-slate-900 text-slate-100 border border-slate-800"
-    : "bg-white text-gray-900 border border-gray-200";
-
   if (!open) return null;
 
   return (
@@ -37,12 +27,12 @@ export function BaseModal({
       aria-modal="true"
       aria-label={title}
     >
-      <div className={overlayClass} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative z-10 w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`${cardClass} rounded-xl shadow-xl p-6`}>
+        <div className="bg-white text-gray-900 border border-gray-200 rounded-xl shadow-xl p-6">
           {title && <h2 className="text-xl font-semibold mb-4">{title}</h2>}
           {children}
           {footer ? <div className="mt-6">{footer}</div> : null}

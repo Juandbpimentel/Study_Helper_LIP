@@ -85,12 +85,12 @@ export default function ProfilePage() {
     resolver: zodResolver(profileSchema),
     defaultValues: user
       ? {
-          nome: user.nome || "",
-          primeiroDiaSemana: user.primeiroDiaSemana || "Dom",
-          planejamentoRevisoes: [
-            ...(user.planejamentoRevisoes ?? [1, 7, 14]),
-          ].sort((a, b) => a - b),
-        }
+        nome: user.nome || "",
+        primeiroDiaSemana: user.primeiroDiaSemana || "Dom",
+        planejamentoRevisoes: [
+          ...(user.planejamentoRevisoes ?? [1, 7, 14]),
+        ].sort((a, b) => a - b),
+      }
       : undefined,
   });
   const { reset } = profileForm;
@@ -229,13 +229,13 @@ export default function ProfilePage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setEmailModal(true)}
-                className="ui-btn-ghost text-sm"
+                className="ui-btn-secondary"
               >
                 Editar e-mail
               </button>
               <button
                 onClick={() => setPasswordModal(true)}
-                className="ui-btn-ghost text-sm"
+                className="ui-btn-secondary"
               >
                 Editar senha
               </button>
@@ -311,7 +311,7 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={addPlano}
-                      className="ui-btn-ghost"
+                      className="ui-btn-secondary"
                     >
                       Adicionar
                     </button>
@@ -320,13 +320,18 @@ export default function ProfilePage() {
                     {planejamentoValues.map((dia: number) => (
                       <span
                         key={dia}
-                        className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium border bg-gray-100 text-gray-800 border-gray-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold border"
+                        style={{
+                          borderColor: "var(--landing-border)",
+                          background: "var(--landing-surface-alt)",
+                          color: "var(--landing-text)",
+                        }}
                       >
                         {dia} dias
                         <button
                           type="button"
                           onClick={() => removePlano(dia)}
-                          className="text-red-600 hover:text-red-700 dark:hover:text-red-400 cursor-pointer"
+                          className="text-amber-700 hover:text-amber-800 cursor-pointer"
                         >
                           ×
                         </button>
@@ -363,7 +368,7 @@ export default function ProfilePage() {
                       setEditing(false);
                       profileForm.reset();
                     }}
-                    className="ui-btn-ghost"
+                    className="ui-btn-secondary"
                   >
                     Cancelar
                   </button>
@@ -372,7 +377,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  className="ui-btn-ghost"
+                  className="ui-btn-secondary"
                 >
                   Editar dados
                 </button>

@@ -38,7 +38,7 @@ export default function RegisterPage() {
     <div className="app-page-surface flex items-center justify-center px-4 py-10">
       <div className="max-w-5xl w-full grid lg:grid-cols-2 gap-8 items-center">
         <div className="hero-block hidden lg:block space-y-4">
-          <p className="ui-hero-badge hero-badge bg-white border-slate-200 shadow-sm dark:bg-slate-900/70 dark:border-slate-800">
+          <p className="ui-hero-badge hero-badge bg-white border-slate-200 text-slate-900 shadow-sm">
             Novo por aqui?
           </p>
           <h1 className="hero-text text-4xl font-semibold leading-tight opacity-100 mix-blend-normal">
@@ -48,12 +48,12 @@ export default function RegisterPage() {
             Crie sua conta para montar cronogramas, acompanhar revisões e manter
             o foco no que importa.
           </p>
-          <div className="h-12 w-1 rounded-full bg-gradient-to-b from-emerald-500 via-cyan-500 to-lime-400"></div>
+          <div className="h-12 w-1 rounded-full bg-gradient-to-b from-amber-500 via-orange-500 to-yellow-400"></div>
         </div>
 
         <div className="ui-card-contrast">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-emerald-700">
+            <p className="text-sm font-medium text-amber-700">
               Cadastro rápido
             </p>
             <h2 className="text-3xl font-semibold">Crie sua conta</h2>
@@ -138,13 +138,16 @@ export default function RegisterPage() {
               />
             </div>
 
-            <button type="submit" disabled={loading} className="ui-btn-cta">
+            <button type="submit" disabled={loading} className="ui-btn-cta ui-btn-block">
               {loading ? "Criando conta..." : "Criar conta"}
             </button>
 
             <p className="text-sm text-slate-600 text-center">
               Já possui conta?{" "}
-              <Link href="/login" className="ui-link-accent">
+              <Link
+                href="/login"
+                className="font-semibold text-amber-700 hover:text-amber-800"
+              >
                 Entrar
               </Link>
             </p>

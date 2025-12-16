@@ -30,7 +30,7 @@ export default function LoginPage() {
     <div className="app-page-surface flex items-center justify-center px-4 py-10">
       <div className="max-w-5xl w-full grid lg:grid-cols-2 gap-8 items-center">
         <div className="hero-block hidden lg:block space-y-4">
-          <p className="ui-hero-badge hero-badge bg-white border-slate-200 shadow-sm dark:bg-slate-900/70 dark:border-slate-800">
+          <p className="ui-hero-badge hero-badge bg-white border-slate-200 text-slate-900 shadow-sm">
             Study Helper
           </p>
           <h1 className="hero-text text-4xl font-semibold leading-tight opacity-100 mix-blend-normal">
@@ -40,12 +40,12 @@ export default function LoginPage() {
             Centralize cronogramas, revisões e sessões de estudo em um painel
             único. Entre para continuar sua rotina.
           </p>
-          <div className="h-12 w-1 rounded-full bg-gradient-to-b from-cyan-500 via-emerald-500 to-lime-400"></div>
+          <div className="h-12 w-1 rounded-full bg-gradient-to-b from-amber-500 via-orange-500 to-yellow-400"></div>
         </div>
 
         <div className="ui-card-contrast">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-cyan-700">
+            <p className="text-sm font-medium text-amber-700">
               Bem-vindo de volta
             </p>
             <h2 className="text-3xl font-semibold">Acesse sua conta</h2>
@@ -95,13 +95,16 @@ export default function LoginPage() {
               />
             </div>
 
-            <button type="submit" disabled={loading} className="ui-btn-cta">
+            <button type="submit" disabled={loading} className="ui-btn-cta ui-btn-block">
               {loading ? "Entrando..." : "Entrar"}
             </button>
 
             <p className="text-sm text-slate-600 text-center">
               Ainda não tem conta?{" "}
-              <Link href="/register" className="ui-link-accent">
+              <Link
+                href="/register"
+                className="font-semibold text-amber-700 hover:text-amber-800"
+              >
                 Criar conta
               </Link>
             </p>
