@@ -103,7 +103,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Debug: print node/npm/versions and env
+      - name: "Debug: print node/npm/versions and env"
         run: |
           echo "Node version: $(node --version)"
           echo "npm version: $(npm --version)"

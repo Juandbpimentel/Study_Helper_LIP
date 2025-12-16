@@ -28,7 +28,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Debug: print node, npm and env
+      - name: "Debug: print node, npm and env"
         run: |
           node --version
           npm --version
