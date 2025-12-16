@@ -21,12 +21,24 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "22 || >=22 <23"
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
         run: npm ci
+
+      - name: Check required secrets (PROD)
+        run: |
+          if [ -z "${{ secrets.API_URL_PROD }}" ]; then echo "Missing secret: API_URL_PROD"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_SITE_ID_PROD }}" ]; then echo "Missing secret: NETLIFY_SITE_ID_PROD"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_AUTH_TOKEN_PROD }}" ]; then echo "Missing secret: NETLIFY_AUTH_TOKEN_PROD"; exit 1; fi
+
+      - name: Check required secrets (DEV)
+        run: |
+          if [ -z "${{ secrets.API_URL_DEV }}" ]; then echo "Missing secret: API_URL_DEV"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_SITE_ID_DEV }}" ]; then echo "Missing secret: NETLIFY_SITE_ID_DEV"; exit 1; fi
+          if [ -z "${{ secrets.NETLIFY_AUTH_TOKEN_DEV }}" ]; then echo "Missing secret: NETLIFY_AUTH_TOKEN_DEV"; exit 1; fi
 
       - name: Run Linter
         run: npm run lint
@@ -52,7 +64,7 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "22 || >=22 <23"
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -84,16 +96,27 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "22 || >=22 <23"
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Debug: print node/npm/versions and env
+        run: |
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Working dir: $(pwd)"
+          echo "NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV"
+          echo "NODE_ENV=$NODE_ENV"
+          ls -la
+
       - name: Build Frontend for DEV
         env:
-          NODE_ENV: development
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_OPTIONS: "--trace-warnings"
           NEXT_PUBLIC_API_URL: ${{ secrets.API_URL_DEV }}
           NEXT_PUBLIC_ENV: development
         run: npm run build
@@ -124,7 +147,7 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "22 || >=22 <23"
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
