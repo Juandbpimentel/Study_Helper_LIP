@@ -51,6 +51,12 @@ jobs:
           PGSTATEMENTTIMEOUT: 30000
         run: npx prisma migrate deploy
 
+      - name: Seed Database (DEV)
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
+        run: npx prisma db seed
+
       - name: Build
         run: npm run build
 
@@ -99,6 +105,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           PGSTATEMENTTIMEOUT: 30000
         run: npx prisma migrate deploy
+
+      - name: Seed Database (PROD)
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          PGSTATEMENTTIMEOUT: 30000
+        run: npx prisma db seed
 
       - name: Build
         run: npm run build

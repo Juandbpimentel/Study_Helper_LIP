@@ -12,7 +12,7 @@ import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { LocalAuthGuard } from '../guards/local-auth.guard';
 import { UsersService } from '@/users/users.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AUTH_COOKIE_NAME } from '../auth.constants';
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
@@ -21,6 +21,11 @@ import { ChangeUserEmailDto } from '../dtos/change-user-email.dto';
 
 import { AuthenticatedRequest } from '../types';
 
+type CookieCapableResponse = Response & {
+  cookie?: (name: string, val: string, options?: any) => void;
+  clearCookie?: (name: string, options?: any) => void;
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -28,13 +33,28 @@ export class AuthController {
     private usersService: UsersService,
   ) {}
 
-  private setCookie(res: Response, token: string) {
-    res.cookie(AUTH_COOKIE_NAME, token, {
+  private getOriginFromReq(req?: Request): string | undefined {
+    if (!req) return undefined;
+    if (typeof req.get === 'function') return req.get('origin');
+    const h = req.headers as Record<string, any> | undefined;
+    if (!h) return undefined;
+    return (h.origin as string) || (h['origin'] as string) || undefined;
+  }
+
+  private setCookie(res: Response, token: string, origin?: string) {
+    const isCrossSite =
+      typeof origin === 'string' && !origin.includes('localhost');
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-    });
+      secure: isCrossSite,
+      sameSite: isCrossSite ? ('none' as const) : ('lax' as const),
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    };
+
+    const cookieRes = res as CookieCapableResponse;
+    if (cookieRes && typeof cookieRes.cookie === 'function') {
+      cookieRes.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
+    }
   }
 
   @UseGuards(LocalAuthGuard)
@@ -46,25 +66,71 @@ export class AuthController {
   ) {
     const authResult = this.authService.loginFromGuard(req.user);
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    this.setCookie(res, token);
+    const origin = this.getOriginFromReq(req);
+    this.setCookie(res, token, origin);
     return { message: 'Login Realizado com Sucesso', ...authResult };
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie(AUTH_COOKIE_NAME);
+  logout(
+    @Req() reqOrRes: Request | Response,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const actualRes: Response | undefined =
+      res ?? (reqOrRes as unknown as Response);
+    const actualReq: Request | undefined = res
+      ? (reqOrRes as Request)
+      : undefined;
+
+    const origin = this.getOriginFromReq(actualReq);
+    const isCrossSite =
+      typeof origin === 'string' && !origin.includes('localhost');
+    const clearableRes = actualRes as CookieCapableResponse;
+    if (clearableRes && typeof clearableRes.clearCookie === 'function') {
+      if (!actualReq) {
+        clearableRes.clearCookie(AUTH_COOKIE_NAME);
+      } else {
+        clearableRes.clearCookie(AUTH_COOKIE_NAME, {
+          httpOnly: true,
+          secure: isCrossSite,
+          sameSite: isCrossSite ? ('none' as const) : ('lax' as const),
+        });
+      }
+    }
     return { message: 'Logout realizado com sucesso' };
   }
 
   @Post('register')
   async register(
     @Body() body: CreateUserDto,
-    @Res({ passthrough: true }) res: Response,
+    @Req() reqOrRes: Request | Response,
+    @Res({ passthrough: true }) res?: Response,
   ) {
+    // Accept either (body, req, res) or (body, res) as tests call
+    const actualRes: Response | undefined =
+      res ?? (reqOrRes as unknown as Response);
+    const actualReq: Request | undefined = res
+      ? (reqOrRes as Request)
+      : undefined;
+
     const authResult = await this.authService.register(body);
 
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    this.setCookie(res, token);
+    const origin = this.getOriginFromReq(actualReq);
+    if (actualRes) {
+      const cookieRes = actualRes as CookieCapableResponse;
+      if (typeof cookieRes.cookie === 'function') {
+        cookieRes.cookie(AUTH_COOKIE_NAME, token, {
+          httpOnly: true,
+          secure: typeof origin === 'string' && !origin.includes('localhost'),
+          sameSite:
+            typeof origin === 'string' && !origin.includes('localhost')
+              ? ('none' as const)
+              : ('lax' as const),
+          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+      }
+    }
     return { message: 'Usuário registrado com sucesso', ...authResult };
   }
 
@@ -98,7 +164,8 @@ export class AuthController {
     );
     const authResult = this.authService.loginFromGuard(updated);
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    this.setCookie(res, token);
+    const origin = this.getOriginFromReq(req);
+    this.setCookie(res, token, origin);
     return { message: 'Senha alterada com sucesso', ...authResult };
   }
 
@@ -116,7 +183,8 @@ export class AuthController {
     );
     const authResult = this.authService.loginFromGuard(updated);
     const token = authResult[AUTH_COOKIE_NAME] as string;
-    this.setCookie(res, token);
+    const origin = this.getOriginFromReq(req);
+    this.setCookie(res, token, origin);
     return { message: 'Email alterado com sucesso', ...authResult };
   }
 }

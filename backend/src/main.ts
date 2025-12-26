@@ -15,10 +15,32 @@ async function bootstrap() {
     }),
   );
 
-  // Configuração CORS para permitir cookies do frontend
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL_DEV,
+    process.env.FRONTEND_URL_PROD,
+    'http://localhost:3000',
+  ].filter(Boolean);
+
+  console.log('CORS allowed origins:', allowedOrigins);
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin not allowed by CORS'));
+    },
     credentials: true, // CRÍTICO: Permite envio de cookies
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   });
 
   app.use(cookieParser());
