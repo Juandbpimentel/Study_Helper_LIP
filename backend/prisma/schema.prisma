@@ -7,111 +7,134 @@ datasource db {
 }
 
 model Usuario {
-  id          Int      @id @default(autoincrement())
-  email       String   @unique
+  id          Int     @id @default(autoincrement())
+  email       String  @unique
   senha       String
   nome        String
-  versaoToken String   @default(uuid()) @map("versao_token")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  isAdmin     Boolean  @default(false) @map("is_admin")
+  versaoToken String  @default(uuid()) @map("versao_token")
+  isAdmin     Boolean @default(false) @map("is_admin")
 
   //preferências do usuário
   primeiroDiaSemana    DiaSemana @default(Dom) @map("primeiro_dia_semana")
   planejamentoRevisoes Int[]     @default([1, 7, 14]) @map("planejamento_revisoes")
 
-  // relações
-  cronogramas CronogramaSemanal[]
-  temas       TemaDeEstudo[]
-  slots       SlotEstudo[]
-  registros   RegistroEstudo[]
-  revisoes    RevisaoProgramada[]
+  cronogramaSemanal   CronogramaSemanal?
+  temasDeEstudo       TemaDeEstudo[]
+  revisoesProgramadas RevisaoProgramada[]
+  registrosEstudo     RegistroEstudo[]
+
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  slotCronogramas SlotCronograma[]
 
   @@map("usuarios")
 }
 
 model CronogramaSemanal {
-  id         Int      @id @default(autoincrement())
-  titulo     String
-  descricao  String?
-  dataInicio DateTime @map("data_inicio")
-  dataFim    DateTime @map("data_fim")
-  creatorId  Int      @map("creator_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  createdBy Usuario      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  slots     SlotEstudo[]
-
-  @@map("cronogramas")
-}
-
-enum DiaSemana {
-  Dom
-  Seg
-  Ter
-  Qua
-  Qui
-  Sex
-  Sab
-}
-
-model TemaDeEstudo {
-  id        Int @id @default(autoincrement())
-  creatorId Int @map("usuario_id")
-
-  tema      String   @db.VarChar(255)
-  descricao String?  @db.VarChar(1000)
+  id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  createdBy Usuario          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  slots     SlotEstudo[]
-  registros RegistroEstudo[]
+  slotsCronograma SlotCronograma[]
 
-  @@map("temas_de_estudo")
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  @@unique([creatorId])
+  @@map("cronogramas_semanais")
 }
 
-model SlotEstudo {
-  id           Int       @id @default(autoincrement())
-  creatorId    Int       @map("usuario_id")
-  cronogramaId Int       @map("cronograma_id")
-  temaId       Int       @map("tema_id")
-  diaSemana    DiaSemana @map("dia_semana")
-  ordem        Int?      @default(0)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+model SlotCronograma {
+  id Int @id @default(autoincrement())
 
-  createdBy  Usuario             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  cronograma CronogramaSemanal   @relation(fields: [cronogramaId], references: [id], onDelete: Cascade)
-  tema       TemaDeEstudo        @relation(fields: [temaId], references: [id], onDelete: Cascade)
-  registros  RegistroEstudo[]
-  revisoes   RevisaoProgramada[]
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  diaSemana DiaSemana @map("dia_semana")
+  ordem     Int?      @default(0)
+
+  cronograma   CronogramaSemanal @relation(fields: [cronogramaId], references: [id], onDelete: Cascade)
+  cronogramaId Int               @map("cronograma_id")
+
+  tema   TemaDeEstudo @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  temaId Int          @map("tema_id")
+
+  registros RegistroEstudo[]
+
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  revisaoProgramadas RevisaoProgramada[]
 
   @@index([creatorId, diaSemana])
-  @@map("slots_estudo")
+  @@map("slots_cronograma")
+}
+
+model TemaDeEstudo {
+  id Int @id @default(autoincrement())
+
+  tema      String   @db.VarChar(255)
+  descricao String?  @db.VarChar(1000)
+  cor       String?  @map("cor") @db.VarChar(7)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  slots     SlotCronograma[]
+  registros RegistroEstudo[]
+
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  @@index([creatorId])
+  @@map("temas_de_estudo")
 }
 
 model RegistroEstudo {
   id               Int          @id @default(autoincrement())
-  creatorId        Int          @map("usuario_id")
-  temaId           Int          @map("tema_id")
-  slotId           Int?         @map("slot_id")
   tempoDedicado    Int          @map("tempo_dedicado")
   conteudoEstudado String?      @map("conteudo_estudado") @db.VarChar(1000)
   tipoRegistro     TipoRegistro @default(EstudoDeTema) @map("tipo_registro")
   dataEstudo       DateTime     @default(now()) @map("data_estudo")
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  createdBy        Usuario             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  tema             TemaDeEstudo        @relation(fields: [temaId], references: [id], onDelete: Cascade)
-  slot             SlotEstudo?         @relation(fields: [slotId], references: [id])
+  tema           TemaDeEstudo?   @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  temaId         Int?            @map("tema_id")
+  slotCronograma SlotCronograma? @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId         Int?            @map("slot_id")
+
   revisoesGeradas  RevisaoProgramada[] @relation("RegistroOrigem")
   revisaoConcluida RevisaoProgramada?  @relation("RegistroConclusao")
 
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([slotId, dataEstudo])
   @@index([creatorId, dataEstudo])
   @@map("registros_estudo")
+}
+
+model RevisaoProgramada {
+  id            Int           @id @default(autoincrement())
+  dataRevisao   DateTime      @map("data_revisao")
+  statusRevisao StatusRevisao @default(Pendente) @map("status_revisao")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  registroOrigem   RegistroEstudo @relation("RegistroOrigem", fields: [registroOrigemId], references: [id], onDelete: Cascade)
+  registroOrigemId Int            @map("registro_origem_id")
+
+  registroConclusao   RegistroEstudo? @relation("RegistroConclusao", fields: [registroConclusaoId], references: [id])
+  registroConclusaoId Int?            @unique @map("registro_conclusao_id")
+
+  slotCronograma   SlotCronograma? @relation(fields: [slotCronogramaId], references: [id])
+  slotCronogramaId Int?            @map("slot_id")
+
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int
+
+  @@index([creatorId, dataRevisao])
+  @@map("revisoes")
 }
 
 enum TipoRegistro {
@@ -127,23 +150,12 @@ enum StatusRevisao {
   Atrasada
 }
 
-model RevisaoProgramada {
-  id                  Int           @id @default(autoincrement())
-  creatorId           Int           @map("usuario_id")
-  temaId              Int           @map("tema_id")
-  slotId              Int?          @map("slot_id")
-  registroOrigemId    Int           @map("registro_origem_id")
-  registroConclusaoId Int?          @unique @map("registro_conclusao_id")
-  dataRevisao         DateTime      @map("data_revisao")
-  statusRevisao       StatusRevisao @default(Pendente) @map("status_revisao")
-  createdAt           DateTime      @default(now()) @map("created_at")
-  updatedAt           DateTime      @updatedAt @map("updated_at")
-
-  createdBy         Usuario         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  slot              SlotEstudo?     @relation(fields: [slotId], references: [id])
-  registroOrigem    RegistroEstudo  @relation("RegistroOrigem", fields: [registroOrigemId], references: [id], onDelete: Cascade)
-  registroConclusao RegistroEstudo? @relation("RegistroConclusao", fields: [registroConclusaoId], references: [id])
-
-  @@index([creatorId, dataRevisao])
-  @@map("revisoes")
+enum DiaSemana {
+  Dom
+  Seg
+  Ter
+  Qua
+  Qui
+  Sex
+  Sab
 }

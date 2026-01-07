@@ -1,0 +1,63 @@
+regras:
+
+para todas as entidades:
+    - Todas as entidades só podem ser vistas pelo seu próprio usuário criador, por exemplo, os temas criados por um usuário só podem ser vistos por ele mesmo.
+
+- Usuários:
+    Cada usuário pode ter vários temas criados por ele
+    Cada usuário pode ter apenas um cronograma semanal
+    Cada usuário pode ter vários registros de estudos
+    Cada usuário pode ter várias revisões programadas
+    A lógica de status do cronograma leva em conta o primeiro dia da semana definido pelo usuário em suas preferências, podendo ser domingo ou segunda-feira
+
+- CronogramaSemanal:
+    um usuário só tem um cronograma
+    Esse cronograma será utilizado para guardar os temas por dia que o usuário pretende estudar. 
+    Ele serve mais como uma referência fixa para o usuário se organizar toda semana
+    O cronograma pode ser editado a qualquer momento pelo usuário
+    O cronograma deve permitir que o usuário defina quais temas ele pretende estudar em cada dia
+
+- Registros de Estudos:
+    Os registros de estudos são criados sempre que o usuário estuda um tema
+    Os registros também devem ser criados quando um usuário for registrar o estudo de uma revisao que havia sido programada para aquele dia no cronograma
+    Os registros também podem ser criados manualmente pelo usuário caso ele queira registrar um estudo EstudoAberto
+    Estes acima são os três tipos de registro de estudo, EstudoDeUmTema, RevisaoProgramada e EstudoAberto
+    Somente o Registro de Estudo do tipo EstudoDeUmTema pode estar relacionado a um slot do cronograma e somente ele gera as Revisões programadas para aquele tema
+    O registro de Revisão se relaciona à entidade de revisão programada como um registro de conclusão para atualizar o status dela.
+    O registro de estudo guarda a data e hora que o usuário estudou o tema
+    O registro de estudo guarda qual tema foi estudado de forma opcional dependendo do tipo, pois o EstudoAberto pode não ter tema e não gera revisão, já o EstudoDeUmTema e RevisaoProgramada sempre terão tema
+    Caso seja do Tipo EstudoDeUmTema ou RevisaoProgramada, o registro de estudo deve guardar a qual slot do cronograma ele está relacionado, para que possamos fazer a lógica de status do slot do cronograma
+    Somente um registro de EstudoDeUmTema atualiza o status de um slot, a RevisaoProgramada e EstudoAberto não atualizam o status do slot do cronograma, são utilizados o slot somente para referenciar o tema estudado
+    Um registro de RevisaoProgramada atualiza o status da revisão programada relacionada a ele
+    O registro de estudo guarda qual usuário estudou o tema
+    O registro de estudo pode ser utilizado para verificar se o tema daquele slot do cronograma foi estudado ou não pelo usuário naquele dia
+    O registro de estudo pode ser utilizado para gerar métricas de estudo do usuário, como tempo total estudado, temas mais estudados, frequência de estudo, entre outras.
+
+- TemaDeEstudo:
+    Um tema pode pertencer a vários slots de um cronograma, porém um slot só pode ter um tema, pois ele será como se fosse uma caixinha dentro do dia do cronograma
+    Um tema pode ter vários registros de estudos relacionados a ele
+    Um tema pode ter várias revisões programadas relacionadas a ele
+    O tema guarda o nome do tema
+    O tema guarda a descrição do tema
+    O tema guarda a cor do tema para facilitar a identificação visual pelo usuário
+    O tema guarda qual usuário o criou
+
+
+- Slots do Cronograma:
+    Cada dia do cronograma pode ter vários slots
+    Um slot do cronograma pode ter apenas um tema associado a ele
+    Os slots do cronograma podem ser editados a qualquer momento pelo usuário
+    Os slots tem definido que dia da semana ele pertence no cronograma (ex: segunda, terça, quarta, etc)
+    Os slots também tem uma ordem dentro do dia para definir a sequência de estudo (ex: slot 1, slot 2, slot 3, etc), e deve sempre ser enviada a ordem pelo front ao atualizar um cronograma
+    Os slots do cronograma podem ter uma lógica de status para indicar se o tema daquele slot foi estudado ou não pelo usuário naquele dia, mesmo que o slot não tenha dia definido nela, 
+    pois essa lógica verifica relacionamentos mais complexos entre o cronograma, e os registros de estudos 
+
+
+- Revisões Programadas:
+    As revisões programadas são criadas automaticamente sempre que um usuário estuda um tema, gerando várias revisões para o futuro baseado em uma lógica de espaçamento definida pelo usuário em suas configurações de preferências
+    As revisões programadas são relacionadas ao tema que foi estudado, gerando várias revisões para aquele tema de acordo com a lógica de espaçamento
+    As revisões programadas tem um status que é atualizado de acordo com os registros de estudo do tipo RevisaoProgramada
+    Um registro de estudo do tipo RevisãoProgramada não gera novas revisões, ele apenas atualiza o status da revisão programada relacionada a ele, pois somente o tipo EstudoDeUmTema gera as revisões programadas
+    As revisões programadas guardam a data que o usuário deve revisar aquele tema, e caso passe da data sem o usuário ter revisado, o status da revisão programada deve indicar que está atrasada, podendo ainda sim ser revisada posteriormente
+    As revisões programadas não guardam qual tema deve ser revisado, pois ele pode ser obtido através do relacionamento com o tema que foi estudado originalmente no registro de estudo do tipo EstudoDeUmTema que gerou a revisão programada
+    para os slots do cronograma, ocorre a mesma regra que para o tema, ou seja, a revisão não guarda o slot do cronograma, mas ele pode ser obtido através do relacionamento com o tema que foi estudado originalmente no registro de estudo do tipo EstudoDeUmTema que gerou a revisão programada 

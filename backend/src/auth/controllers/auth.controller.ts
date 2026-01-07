@@ -20,12 +20,30 @@ import { ChangeUserPasswordDto } from '../dtos/change-user-password.dto';
 import { ChangeUserEmailDto } from '../dtos/change-user-email.dto';
 
 import { AuthenticatedRequest } from '../types';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import {
+  AuthProfileResponseDto,
+  AuthSuccessResponseDto,
+  LogoutResponseDto,
+} from '../dtos/auth-response.dto';
 
 type CookieCapableResponse = Response & {
   cookie?: (name: string, val: string, options?: any) => void;
   clearCookie?: (name: string, options?: any) => void;
 };
 
+@ApiTags('Autenticação')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -58,6 +76,27 @@ export class AuthController {
   }
 
   @UseGuards(LocalAuthGuard)
+  @ApiOperation({
+    summary: 'Autenticar usuário',
+    description:
+      'Valida as credenciais informadas, emite um token JWT e registra o cookie httpOnly para sessões subsequentes.',
+  })
+  @ApiBody({
+    type: LoginRequestDto,
+    description:
+      'Informe o email e a senha válidos. O token também será enviado no cookie configurado para o domínio de origem.',
+  })
+  @ApiOkResponse({
+    description:
+      'Credenciais válidas. Retorna o token JWT e os dados públicos do usuário autenticado.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Credenciais inválidas ou usuário não encontrado.',
+  })
+  @ApiBadRequestResponse({
+    description: 'Falha de validação nos campos informados.',
+  })
   @Post('login')
   login(
     @Body() body: LoginRequestDto,
@@ -71,6 +110,16 @@ export class AuthController {
     return { message: 'Login Realizado com Sucesso', ...authResult };
   }
 
+  @ApiOperation({
+    summary: 'Encerrar sessão atual',
+    description:
+      'Remove o cookie de autenticação do cliente. Pode ser chamado mesmo sem autenticação ativa.',
+  })
+  @ApiCookieAuth()
+  @ApiOkResponse({
+    description: 'Cookie removido com sucesso e sessão invalidada.',
+    type: LogoutResponseDto,
+  })
   @Post('logout')
   logout(
     @Req() reqOrRes: Request | Response,
@@ -100,6 +149,26 @@ export class AuthController {
     return { message: 'Logout realizado com sucesso' };
   }
 
+  @ApiOperation({
+    summary: 'Registrar novo usuário',
+    description:
+      'Cria uma conta, gera o token JWT inicial e já devolve o cookie de sessão configurado.',
+  })
+  @ApiBody({
+    type: CreateUserDto,
+    description: 'Dados necessários para registrar uma nova conta.',
+  })
+  @ApiCreatedResponse({
+    description:
+      'Usuário criado, token emitido e sessão autenticada imediatamente.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Falha de validação ou senha fora dos requisitos mínimos.',
+  })
+  @ApiConflictResponse({
+    description: 'Email informado já está em uso.',
+  })
   @Post('register')
   async register(
     @Body() body: CreateUserDto,
@@ -135,6 +204,20 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Recuperar perfil autenticado',
+    description:
+      'Retorna dados essenciais do usuário autenticado usando o token presente no cookie ou no header Authorization.',
+  })
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiOkResponse({
+    description: 'Perfil recuperado com sucesso.',
+    type: AuthProfileResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token ausente, inválido ou expirado.',
+  })
   @Get('profile')
   getProfile(@Req() req: AuthenticatedRequest) {
     const payload = {
@@ -151,6 +234,29 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Trocar senha do usuário',
+    description:
+      'Valida a senha atual, atualiza a senha e rota o token do usuário, retornando o novo JWT.',
+  })
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiBody({
+    type: ChangeUserPasswordDto,
+    description:
+      'Informe a senha antiga e a nova senha com os critérios mínimos.',
+  })
+  @ApiOkResponse({
+    description: 'Senha alterada com sucesso e novo token emitido.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Nova senha inválida, igual à anterior ou violação de regras de negócio.',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Senha atual incorreta ou token inválido.',
+  })
   @Patch('change-password')
   async changePassword(
     @Req() req: AuthenticatedRequest,
@@ -170,6 +276,27 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Trocar email do usuário',
+    description:
+      'Valida a senha atual, garante unicidade do novo email e devolve um novo token JWT atualizado.',
+  })
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiBody({
+    type: ChangeUserEmailDto,
+    description: 'Informe a senha atual e o novo email desejado.',
+  })
+  @ApiOkResponse({
+    description: 'Email alterado com sucesso e novo token emitido.',
+    type: AuthSuccessResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Novo email inválido ou já utilizado por outro usuário.',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Senha atual inválida ou token expirado.',
+  })
   @Patch('change-email')
   async changeEmail(
     @Req() req: AuthenticatedRequest,
