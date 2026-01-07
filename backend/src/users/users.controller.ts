@@ -17,32 +17,116 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 
 import { AuthenticatedRequest } from '@/auth/types';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiCookieAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { UserResponseDto } from './dto/user-response.dto';
 
 @UseGuards(JwtAuthGuard)
+@ApiTags('Usuários')
+@ApiBearerAuth()
+@ApiCookieAuth()
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Listar usuários',
+    description:
+      'Disponível apenas para administradores. Retorna todos os usuários cadastrados.',
+  })
+  @ApiOkResponse({
+    description: 'Lista de usuários retornada com sucesso.',
+    type: UserResponseDto,
+    isArray: true,
+  })
+  @ApiForbiddenResponse({
+    description: 'Usuário autenticado não possui privilégios administrativos.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
   @Get()
   findAll() {
     return this.usersService.findAll();
   }
 
+  @ApiOperation({
+    summary: 'Buscar usuário por id',
+    description: 'Retorna dados do usuário solicitado.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiOkResponse({ description: 'Usuário localizado.', type: UserResponseDto })
+  @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return await this.usersService.findOne(id);
   }
 
+  @ApiOperation({
+    summary: 'Atualizar perfil de usuário',
+    description:
+      'Permite que o próprio usuário (ou um administrador) atualize dados do perfil.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiBody({
+    type: UpdateUserDto,
+    description: 'Campos que serão atualizados.',
+  })
+  @ApiOkResponse({
+    description: 'Usuário atualizado com sucesso.',
+    type: UserResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Dados inválidos enviados na requisição.',
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'Usuário autenticado não possui permissão para alterar este perfil.',
+  })
   @Patch(':id')
   updateProfile(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
+    @Req() req: AuthenticatedRequest,
   ) {
+    if (req.user.id !== id && !req.user.isAdmin) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para atualizar este usuário',
+      );
+    }
     return this.usersService.update(id, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiOperation({
+    summary: 'Definir papel administrativo',
+    description:
+      'Permite a um administrador conceder ou revogar privilégios administrativos para outro usuário.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiBody({
+    type: UpdateUserRoleDto,
+    description: 'Flag indicando se o usuário será administrador.',
+  })
+  @ApiOkResponse({
+    description: 'Papel atualizado com sucesso.',
+    type: UserResponseDto,
+  })
+  @ApiForbiddenResponse({
+    description: 'Usuário autenticado não possui privilégios administrativos.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
   @Patch(':id/role')
   setRole(
     @Param('id', ParseIntPipe) id: number,
@@ -51,6 +135,21 @@ export class UsersController {
     return this.usersService.updateRole(id, dto.isAdmin);
   }
 
+  @ApiOperation({
+    summary: 'Remover usuário',
+    description:
+      'Permite que o próprio usuário ou um administrador remova a conta selecionada.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiOkResponse({
+    description: 'Usuário removido com sucesso.',
+    type: UserResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'Usuário autenticado não possui permissão para remover esta conta.',
+  })
+  @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
   @Delete(':id')
   remove(
     @Param('id', ParseIntPipe) id: number,

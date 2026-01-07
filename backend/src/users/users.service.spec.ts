@@ -9,10 +9,13 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
-jest.mock('crypto', () => ({
-  ...jest.requireActual('crypto'),
-  randomUUID: jest.fn(),
-}));
+jest.mock<typeof import('crypto')>('crypto', () => {
+  const actual = jest.requireActual<typeof import('crypto')>('crypto');
+  return {
+    ...actual,
+    randomUUID: jest.fn(),
+  };
+});
 
 describe('UsersService', () => {
   let service: UsersService;
