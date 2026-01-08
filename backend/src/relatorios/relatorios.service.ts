@@ -13,7 +13,7 @@ import {
 } from '@/common/utils/date.utils';
 import { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
 import { MetricsService } from '@/common/services/metrics.service';
-import { OfensivaService } from '@/common/services/ofensiva.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 
 @Injectable()
 export class RelatoriosService {

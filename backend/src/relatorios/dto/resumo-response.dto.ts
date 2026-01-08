@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OfensivaDto } from '@/common/dto/ofensiva.dto';
+import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
 
 export class PeriodoRelatorioDto {
   @ApiProperty({

@@ -16,7 +16,7 @@ import {
   getPagination,
   shouldPaginate,
 } from '@/common/utils/pagination.utils';
-import { OfensivaService } from '@/common/services/ofensiva.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 
 @Injectable()
 export class RegistrosService {

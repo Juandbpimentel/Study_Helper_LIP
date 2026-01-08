@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { DiaSemana } from '@prisma/client';
 import { UserResponseDto } from '@/users/dto/user-response.dto';
-import { OfensivaDto } from '@/common/dto/ofensiva.dto';
+import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
 
 export class GoogleCalendarBackendStatusDto {
   @ApiProperty({

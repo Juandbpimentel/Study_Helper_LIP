@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { OfensivaService } from '@/common/services/ofensiva.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 import { RevisoesService } from '@/revisoes/revisoes.service';
 
 @Injectable()
@@ -12,8 +12,6 @@ export class MaintenanceCronService {
     private readonly revisoesService: RevisoesService,
   ) {}
 
-  // Roda 1x ao dia para “decair” a ofensiva (consumo de bloqueio por dia sem atividade)
-  // e atualizar status de revisões com base na data.
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async dailyMaintenance(): Promise<void> {
     try {

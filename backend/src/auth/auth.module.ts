@@ -4,7 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { UsersModule } from '@/users/users.module';
 import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
-import { OfensivaModule } from '@/common/ofensiva/ofensiva.module';
+import { OfensivaModule } from '@/ofensiva/ofensiva.module';
 import { AuthController } from './controllers/auth.controller';
 import { AuthService } from './services/auth.service';
 import { AdminGuard } from './guards/admin.guard';

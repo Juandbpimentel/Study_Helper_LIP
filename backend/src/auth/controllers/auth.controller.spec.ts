@@ -7,7 +7,7 @@ import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
 import { DiaSemana, Usuario } from '@prisma/client';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
-import { OfensivaService } from '@/common/services/ofensiva.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 
 describe('AuthController', () => {
   let controller: AuthController;

@@ -3,8 +3,8 @@ import { PrismaService } from '@/prisma/prisma.service';
 import {
   calcularOfensivaPorDiasAtivos,
   OfensivaResumo,
-} from '../utils/streak.utils';
-import { addDays, startOfDay } from '../utils/date.utils';
+} from '@/common/utils/streak.utils';
+import { addDays, startOfDay } from '@/common/utils/date.utils';
 import type { Usuario } from '@prisma/client';
 
 @Injectable()

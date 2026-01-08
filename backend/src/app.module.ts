@@ -12,7 +12,7 @@ import { RelatoriosModule } from '@/relatorios/relatorios.module';
 import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
 import { PublicController } from './public/public.controller';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CommonJobsModule } from '@/common/jobs/jobs.module';
+import { JobsModule } from '@/jobs/jobs.module';
 
 @Module({
   imports: [
@@ -26,7 +26,7 @@ import { CommonJobsModule } from '@/common/jobs/jobs.module';
     RevisoesModule,
     RelatoriosModule,
     GoogleIntegrationsModule,
-    CommonJobsModule,
+    JobsModule,
   ],
   controllers: [AppController, PublicController],
   providers: [AppService],

@@ -38,7 +38,7 @@ import {
   LogoutResponseDto,
 } from '../dtos/auth-response.dto';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
-import { OfensivaService } from '@/common/services/ofensiva.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 
 type CookieCapableResponse = Response & {
   cookie?: (name: string, val: string, options?: any) => void;
