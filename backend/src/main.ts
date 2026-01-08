@@ -17,15 +17,17 @@ async function bootstrap() {
   );
 
   const port = Number(process.env.PORT ?? 8080);
-
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_URL_DEV,
-    process.env.FRONTEND_URL_PROD,
-    'http://localhost:3000',
-    `http://localhost:${port}`,
-    `http://127.0.0.1:${port}`,
-  ].filter(Boolean);
+  const tempAllowedOrigins: string[] = [];
+  tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
+  if (process.env.NODE_ENV === 'development') {
+    tempAllowedOrigins.push('http://localhost:3000');
+    tempAllowedOrigins.push(`http://localhost:${port}`);
+    tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
+    tempAllowedOrigins.push('https://hoppscotch.io');
+  }
+  const allowedOrigins: string[] = tempAllowedOrigins.filter(
+    (origin) => origin && origin.length > 0,
+  );
 
   console.log('CORS allowed origins:', allowedOrigins);
 
