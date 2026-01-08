@@ -14,7 +14,25 @@ import { DiaSemana, PrismaClient, StatusRevisao } from '@prisma/client';
 
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
+function looksLikeEncryptedSecret(v: string): boolean {
+  // encryptSecret retorna: v1.<iv>.<tag>.<ciphertext>
+  const parts = v.split('.');
+  return parts.length === 4 && parts[0] === 'v1';
+}
+
+function decryptMaybeEncryptedSecret(v: string): string {
+  if (!looksLikeEncryptedSecret(v)) return v;
+  return decryptSecret(v);
+}
+
 type UnknownRecord = Record<string, unknown>;
+
+export type GoogleCalendarBackendStatus = {
+  enabled: boolean;
+  oauthConfigured: boolean;
+  encryptionKeyConfigured: boolean;
+  issues: string[];
+};
 
 function isObjectRecord(v: unknown): v is UnknownRecord {
   return typeof v === 'object' && v !== null;
@@ -82,11 +100,68 @@ export class GoogleCalendarService {
     this.prismaDb = this.prisma as unknown as PrismaClient;
   }
 
-  private isConfigured(): boolean {
+  private isOauthConfigured(): boolean {
     return (
       Boolean(env('GOOGLE_CLIENT_ID')) &&
       Boolean(env('GOOGLE_CLIENT_SECRET')) &&
       Boolean(env('GOOGLE_REDIRECT_URI'))
+    );
+  }
+
+  private isEncryptionKeyConfigured(): boolean {
+    const raw = env('GOOGLE_TOKEN_ENCRYPTION_KEY');
+    if (!raw) return false;
+
+    // Mesma regra do crypto.utils: aceitar base64 (recomendado) ou hex.
+    const isLikelyBase64 = /[^0-9a-f]/i.test(raw);
+    const buf = Buffer.from(raw, isLikelyBase64 ? 'base64' : 'hex');
+    return buf.length === 32;
+  }
+
+  getBackendStatus(): GoogleCalendarBackendStatus {
+    const issues: string[] = [];
+
+    const hasClientId = Boolean(env('GOOGLE_CLIENT_ID'));
+    const hasClientSecret = Boolean(env('GOOGLE_CLIENT_SECRET'));
+    const hasRedirect = Boolean(env('GOOGLE_REDIRECT_URI'));
+    const oauthConfigured = hasClientId && hasClientSecret && hasRedirect;
+
+    if (!hasClientId) issues.push('GOOGLE_CLIENT_ID ausente');
+    if (!hasClientSecret) issues.push('GOOGLE_CLIENT_SECRET ausente');
+    if (!hasRedirect) issues.push('GOOGLE_REDIRECT_URI ausente');
+
+    const encryptionKeyRaw = env('GOOGLE_TOKEN_ENCRYPTION_KEY');
+    if (!encryptionKeyRaw) {
+      issues.push('GOOGLE_TOKEN_ENCRYPTION_KEY ausente');
+    } else if (!this.isEncryptionKeyConfigured()) {
+      issues.push(
+        'GOOGLE_TOKEN_ENCRYPTION_KEY inválida (esperado 32 bytes em base64 ou hex)',
+      );
+    }
+
+    const encryptionKeyConfigured = this.isEncryptionKeyConfigured();
+    const enabled = oauthConfigured && encryptionKeyConfigured;
+
+    return {
+      enabled,
+      oauthConfigured,
+      encryptionKeyConfigured,
+      issues,
+    };
+  }
+
+  private assertBackendHealthyForGoogleRoutes(): void {
+    const status = this.getBackendStatus();
+    if (status.enabled) return;
+
+    throw new HttpException(
+      {
+        code: 'GOOGLE_CALENDAR_NOT_CONFIGURED',
+        message:
+          'Integração com Google Calendar não está configurada neste backend.',
+        googleCalendar: status,
+      },
+      HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
 
@@ -178,11 +253,7 @@ export class GoogleCalendarService {
   }
 
   buildAuthUrl(userId: number): string {
-    if (!this.isConfigured()) {
-      throw new Error(
-        'OAuth do Google Calendar não está configurado (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).',
-      );
-    }
+    this.assertBackendHealthyForGoogleRoutes();
 
     const state = this.jwt.sign(
       {
@@ -206,11 +277,7 @@ export class GoogleCalendarService {
     code: string,
     stateJwt: string,
   ): Promise<{ redirectUrl: string }> {
-    if (!this.isConfigured()) {
-      throw new Error(
-        'OAuth do Google Calendar não está configurado (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).',
-      );
-    }
+    this.assertBackendHealthyForGoogleRoutes();
 
     const payload = this.jwt.verify<{ userId: number }>(stateJwt);
     const userId = payload?.userId;
@@ -241,18 +308,23 @@ export class GoogleCalendarService {
         ? encryptSecret(refreshToken)
         : (existing?.refreshTokenEncrypted ?? null);
 
+      const accessToken =
+        typeof tokens.access_token === 'string'
+          ? encryptSecret(tokens.access_token)
+          : undefined;
+
       await tx.googleCalendarIntegration.upsert({
         where: { creatorId: userId },
         create: {
           creatorId: userId,
-          accessToken: tokens.access_token ?? null,
+          accessToken: accessToken ?? null,
           refreshTokenEncrypted,
           tokenType: tokens.token_type ?? null,
           scope: tokens.scope ?? null,
           expiryDate,
         },
         update: {
-          accessToken: tokens.access_token ?? existing?.accessToken ?? null,
+          accessToken: accessToken ?? existing?.accessToken ?? null,
           refreshTokenEncrypted,
           tokenType: tokens.token_type ?? existing?.tokenType ?? null,
           scope: tokens.scope ?? existing?.scope ?? null,
@@ -296,6 +368,9 @@ export class GoogleCalendarService {
    * Não lança erro (ideal para rodar pós-login).
    */
   async verifyAccessAndCleanupIfRevoked(userId: number): Promise<boolean> {
+    // Se o backend não está configurado para Google, não deve quebrar login.
+    if (!this.isOauthConfigured()) return false;
+
     try {
       const client = await this.getCalendarClientForOperation(userId, {
         throwOnRevoked: false,
@@ -308,7 +383,7 @@ export class GoogleCalendarService {
   }
 
   private async getOAuthClientOrNull(userId: number) {
-    if (!this.isConfigured()) return null;
+    if (!this.isOauthConfigured()) return null;
 
     const integration =
       await this.prismaDb.googleCalendarIntegration.findUnique({
@@ -341,8 +416,21 @@ export class GoogleCalendarService {
       );
     }
 
+    let accessToken: string | undefined;
+    if (typeof integration.accessToken === 'string') {
+      try {
+        accessToken = decryptMaybeEncryptedSecret(integration.accessToken);
+      } catch (e) {
+        // Se o access token estiver corrompido, dá pra seguir só com refresh token.
+        this.logger.warn(
+          `Falha ao descriptografar access token (user ${userId}). Ignorando access token. ${String(e)}`,
+        );
+        accessToken = undefined;
+      }
+    }
+
     oauth2.setCredentials({
-      access_token: integration.accessToken ?? undefined,
+      access_token: accessToken,
       refresh_token: refreshToken,
       token_type: integration.tokenType ?? undefined,
       scope: integration.scope ?? undefined,
@@ -400,11 +488,21 @@ export class GoogleCalendarService {
       const expiryDate =
         typeof t.expiry_date === 'number' ? new Date(t.expiry_date) : undefined;
 
+      let accessTokenEncrypted: string | undefined;
+      if (typeof t.access_token === 'string') {
+        try {
+          accessTokenEncrypted = encryptSecret(t.access_token);
+        } catch (e) {
+          this.logger.warn(
+            `Falha ao criptografar access token (user ${userId}). ${String(e)}`,
+          );
+        }
+      }
+
       await this.prismaDb.googleCalendarIntegration.update({
         where: { creatorId: userId },
         data: {
-          accessToken:
-            typeof t.access_token === 'string' ? t.access_token : undefined,
+          accessToken: accessTokenEncrypted,
           tokenType:
             typeof t.token_type === 'string' ? t.token_type : undefined,
           scope: typeof t.scope === 'string' ? t.scope : undefined,

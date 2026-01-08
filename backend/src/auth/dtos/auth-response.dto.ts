@@ -2,6 +2,40 @@ import { ApiProperty } from '@nestjs/swagger';
 import { DiaSemana } from '@prisma/client';
 import { UserResponseDto } from '@/users/dto/user-response.dto';
 
+export class GoogleCalendarBackendStatusDto {
+  @ApiProperty({
+    description:
+      'Se o backend está com Google Calendar habilitado (envs necessários presentes e válidos).',
+    example: false,
+  })
+  enabled!: boolean;
+
+  @ApiProperty({
+    description: 'Se o OAuth (client id/secret/redirect) está configurado.',
+    example: false,
+  })
+  oauthConfigured!: boolean;
+
+  @ApiProperty({
+    description:
+      'Se a chave de criptografia do token está configurada e válida.',
+    example: false,
+  })
+  encryptionKeyConfigured!: boolean;
+
+  @ApiProperty({
+    description:
+      'Lista de problemas detectados na configuração (vazia quando enabled=true).',
+    type: [String],
+    example: [
+      'GOOGLE_CLIENT_ID ausente',
+      'GOOGLE_CLIENT_SECRET ausente',
+      'GOOGLE_TOKEN_ENCRYPTION_KEY ausente',
+    ],
+  })
+  issues!: string[];
+}
+
 export class AuthSuccessResponseDto {
   @ApiProperty({
     description: 'Mensagem de confirmação da operação',
@@ -21,6 +55,13 @@ export class AuthSuccessResponseDto {
     type: () => UserResponseDto,
   })
   user!: UserResponseDto;
+
+  @ApiProperty({
+    description:
+      'Status do suporte a Google Calendar neste backend (para feedback no frontend).',
+    type: () => GoogleCalendarBackendStatusDto,
+  })
+  googleCalendar!: GoogleCalendarBackendStatusDto;
 }
 
 export class LogoutResponseDto {

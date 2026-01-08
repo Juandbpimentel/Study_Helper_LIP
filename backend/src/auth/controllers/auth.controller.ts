@@ -53,6 +53,10 @@ export class AuthController {
     private googleCalendar: GoogleCalendarService,
   ) {}
 
+  private getGoogleCalendarBackendStatus() {
+    return this.googleCalendar.getBackendStatus();
+  }
+
   private getOriginFromReq(req?: Request): string | undefined {
     if (!req) return undefined;
     if (typeof req.get === 'function') return req.get('origin');
@@ -112,7 +116,12 @@ export class AuthController {
 
     // Cleanup pós-login: se o usuário revogou acesso no Google, desfaz a integração no banco.
     void this.googleCalendar.verifyAccessAndCleanupIfRevoked(req.user.id);
-    return { message: 'Login Realizado com Sucesso', ...authResult };
+
+    return {
+      message: 'Login Realizado com Sucesso',
+      ...authResult,
+      googleCalendar: this.getGoogleCalendarBackendStatus(),
+    };
   }
 
   @ApiOperation({
@@ -205,7 +214,11 @@ export class AuthController {
         });
       }
     }
-    return { message: 'Usuário registrado com sucesso', ...authResult };
+    return {
+      message: 'Usuário registrado com sucesso',
+      ...authResult,
+      googleCalendar: this.getGoogleCalendarBackendStatus(),
+    };
   }
 
   @UseGuards(JwtAuthGuard)

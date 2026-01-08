@@ -4,11 +4,11 @@ Frontend da aplicação Study Helper, desenvolvido com **Next.js 15** e **Node.j
 
 ## 🛠️ Tecnologias
 
--   **Framework:** [Next.js 15](https://nextjs.org/) (App Router)
--   **Linguagem:** [TypeScript](https://www.typescriptlang.org/)
--   **Runtime:** [Node.js 24](https://nodejs.org/)
--   **Estilização:** [Tailwind CSS 4](https://tailwindcss.com/)
--   **Biblioteca UI:** [React 19](https://react.dev/)
+- **Framework:** [Next.js 15](https://nextjs.org/) (App Router)
+- **Linguagem:** [TypeScript](https://www.typescriptlang.org/)
+- **Runtime:** [Node.js 24](https://nodejs.org/)
+- **Estilização:** [Tailwind CSS 4](https://tailwindcss.com/)
+- **Biblioteca UI:** [React 19](https://react.dev/)
 
 ## 📁 Estrutura do Projeto
 
@@ -21,18 +21,23 @@ src/
 
 ## 🚀 Como Rodar
 
+> Recomendado: suba Postgres + Backend + Frontend via Docker Compose na raiz do repositório (veja o [README principal](../README.md)).
+
 ### Pré-requisitos
--   Node.js 24+
+
+- Node.js 22+
 
 ### Passo a Passo
 
 1.  **Configurar Variáveis de Ambiente:**
     Crie um arquivo `.env` na raiz do diretório `frontend`:
+
     ```env
     NEXT_PUBLIC_API_URL=http://localhost:8080
     ```
 
 2.  **Instalar Dependências:**
+
     ```bash
     npm install
     ```
@@ -45,14 +50,14 @@ src/
 
 ## 🧪 Testes e Qualidade
 
--   **Linting:** `npm run lint`
--   **Type Check:** `npx tsc --noEmit`
--   **Build:** `npm run build`
--   **CI/CD:** Pipelines configurados no GitHub Actions para validação de Pull Requests e Deploy automático.
+- **Linting:** `npm run lint`
+- **Type Check:** `npx tsc --noEmit`
+- **Build:** `npm run build`
+- **CI/CD:** Pipelines configurados no GitHub Actions para validação de Pull Requests e Deploy automático.
 
 ## 📦 Scripts
 
--   `npm run dev`: Inicia o servidor de desenvolvimento.
--   `npm run build`: Cria o build de produção.
--   `npm run start`: Inicia o servidor de produção.
--   `npm run lint`: Executa a verificação de lint.
+- `npm run dev`: Inicia o servidor de desenvolvimento.
+- `npm run build`: Cria o build de produção.
+- `npm run start`: Inicia o servidor de produção.
+- `npm run lint`: Executa a verificação de lint.
