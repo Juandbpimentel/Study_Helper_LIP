@@ -126,5 +126,5 @@ O refresh token é armazenado criptografado (AES-256-GCM). Gere uma chave de 32 
 Exemplo (base64):
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```

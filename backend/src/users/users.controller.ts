@@ -6,7 +6,6 @@ import {
   Param,
   ParseIntPipe,
   Patch,
-  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -16,27 +15,22 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiCookieAuth,
-  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AdminGuard } from '@/auth/guards/admin.guard';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { AuthenticatedRequest } from '@/auth/types';
 import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
 import { OfensivaService } from '@/ofensiva/ofensiva.service';
-import { ListUsersQueryDto } from './dto/list-users.dto';
 import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
-import { UsersService } from './users.service';
+import { UsersService, type PublicUser } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -49,34 +43,6 @@ export class UsersController {
     private readonly ofensivaService: OfensivaService,
   ) {}
 
-  @UseGuards(AdminGuard)
-  @ApiOperation({
-    summary: 'Listar usuários',
-    description:
-      'Disponível apenas para administradores. Retorna todos os usuários cadastrados.',
-  })
-  @ApiOkResponse({
-    description: 'Lista de usuários retornada com sucesso.',
-    type: UserResponseDto,
-    isArray: true,
-  })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number })
-  @ApiQuery({
-    name: 'all',
-    required: false,
-    type: Boolean,
-    description: 'Quando true, retorna sem paginação.',
-  })
-  @ApiForbiddenResponse({
-    description: 'Usuário autenticado não possui privilégios administrativos.',
-  })
-  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
-  @Get()
-  findAll(@Query() query: ListUsersQueryDto) {
-    return this.usersService.findAll(query);
-  }
-
   @ApiOperation({
     summary: 'Obter ofensiva do usuário logado',
     description:
@@ -84,27 +50,34 @@ export class UsersController {
   })
   @ApiResponse({ status: 200, type: OfensivaDto })
   @Get('me/ofensiva')
-  async meOfensiva(@Req() req: AuthenticatedRequest): Promise<OfensivaDto> {
-    const usuario = await this.usersService.findByIdOrThrow(req.user.id);
-    return this.ofensivaService.fromUsuario(usuario);
+  meOfensiva(@Req() req: AuthenticatedRequest): OfensivaDto {
+    return this.ofensivaService.fromUsuario(req.user);
   }
 
   @ApiOperation({
     summary: 'Buscar usuário por id',
-    description: 'Retorna dados do usuário solicitado.',
+    description:
+      'Retorna os dados do próprio usuário autenticado (não permite consultar outros usuários).',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiOkResponse({ description: 'Usuário localizado.', type: UserResponseDto })
   @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return await this.usersService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para acessar este usuário',
+      );
+    }
+    return await this.usersService.findByIdOrThrowPublic(id);
   }
 
   @ApiOperation({
     summary: 'Atualizar perfil de usuário',
-    description:
-      'Permite que o próprio usuário (ou um administrador) atualize dados do perfil.',
+    description: 'Permite que o próprio usuário atualize dados do perfil.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiBody({
@@ -127,19 +100,19 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
-  ) {
-    if (req.user.id !== id && !req.user.isAdmin) {
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
       throw new UnauthorizedException(
         'Você não tem permissão para atualizar este usuário',
       );
     }
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.updatePublic(id, updateUserDto);
   }
 
   @ApiOperation({
     summary: 'Atualizar preferências do cronograma/atraso',
     description:
-      'Permite que o próprio usuário (ou um administrador) ajuste limites e regras de atraso do cronograma e revisões.',
+      'Permite que o próprio usuário ajuste limites e regras de atraso do cronograma e revisões.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiBody({
@@ -159,47 +132,18 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserPreferencesDto,
     @Req() req: AuthenticatedRequest,
-  ) {
-    if (req.user.id !== id && !req.user.isAdmin) {
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
       throw new UnauthorizedException(
         'Você não tem permissão para atualizar este usuário',
       );
     }
-    return this.usersService.updatePreferences(id, dto);
-  }
-
-  @UseGuards(JwtAuthGuard, AdminGuard)
-  @ApiOperation({
-    summary: 'Definir papel administrativo',
-    description:
-      'Permite a um administrador conceder ou revogar privilégios administrativos para outro usuário.',
-  })
-  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
-  @ApiBody({
-    type: UpdateUserRoleDto,
-    description: 'Flag indicando se o usuário será administrador.',
-  })
-  @ApiOkResponse({
-    description: 'Papel atualizado com sucesso.',
-    type: UserResponseDto,
-  })
-  @ApiForbiddenResponse({
-    description: 'Usuário autenticado não possui privilégios administrativos.',
-  })
-  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
-  @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
-  @Patch(':id/role')
-  setRole(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateUserRoleDto,
-  ) {
-    return this.usersService.updateRole(id, dto.isAdmin);
+    return this.usersService.updatePreferencesPublic(id, dto);
   }
 
   @ApiOperation({
     summary: 'Remover usuário',
-    description:
-      'Permite que o próprio usuário ou um administrador remova a conta selecionada.',
+    description: 'Permite que o próprio usuário remova a própria conta.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiOkResponse({
@@ -215,10 +159,10 @@ export class UsersController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: AuthenticatedRequest,
-  ) {
-    if (req.user.id != id && !req.user.isAdmin) {
+  ): Promise<PublicUser> {
+    if (req.user.id != id) {
       throw new UnauthorizedException('Você não pode deletar outro usuário');
     }
-    return this.usersService.remove(id);
+    return this.usersService.removePublic(id);
   }
 }

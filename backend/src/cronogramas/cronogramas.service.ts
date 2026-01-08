@@ -120,7 +120,9 @@ export class CronogramasService {
         diaSemana: slot.diaSemana,
         ordem: slot.ordem,
         tema: slot.tema,
-        dataAlvo: proximaDataAlvo.toISOString(),
+        // `dataAlvo` representa a data prevista DENTRO da semana consultada.
+        // A lógica de conclusão considera o ciclo semanal seguinte para permitir "concluir atrasado".
+        dataAlvo: dataPrevista.toISOString(),
         status,
       };
     });

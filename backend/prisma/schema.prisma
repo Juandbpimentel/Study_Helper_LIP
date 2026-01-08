@@ -7,12 +7,11 @@ datasource db {
 }
 
 model Usuario {
-  id          Int     @id @default(autoincrement())
-  email       String  @unique
+  id          Int    @id @default(autoincrement())
+  email       String @unique
   senha       String
   nome        String
-  versaoToken String  @default(uuid()) @map("versao_token")
-  isAdmin     Boolean @default(false) @map("is_admin")
+  versaoToken String @default(uuid()) @map("versao_token")
 
   //preferências do usuário
   primeiroDiaSemana    DiaSemana @default(Dom) @map("primeiro_dia_semana")

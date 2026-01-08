@@ -5,7 +5,6 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { decryptSecret, encryptSecret } from '@/common/utils/crypto.utils';
 import {
   addDays,
-  formatISODate,
   getOffsetFromFirstDay,
   startOfDay,
   startOfWeek,
@@ -82,6 +81,11 @@ function diaSemanaToByDay(dia: DiaSemana): string {
     default:
       return 'MO';
   }
+}
+
+function formatGoogleAllDayDate(date: Date): string {
+  // Google Calendar API: para eventos all-day, `date` deve ser no formato YYYY-MM-DD.
+  return startOfDay(date).toISOString().slice(0, 10);
 }
 
 @Injectable()
@@ -562,6 +566,66 @@ export class GoogleCalendarService {
     ]);
   }
 
+  async forceSyncAllForUser(userId: number): Promise<void> {
+    this.assertBackendHealthyForGoogleRoutes();
+
+    await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: true,
+    });
+
+    await this.syncAllForUser(userId);
+  }
+
+  async resetAndResyncAllForUser(userId: number): Promise<void> {
+    this.assertBackendHealthyForGoogleRoutes();
+
+    // Garante que há integração válida antes de mexer no banco.
+    const client = await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: true,
+    });
+    if (!client) return;
+
+    const [slots, revisoes] = await this.prismaDb.$transaction([
+      this.prismaDb.slotCronograma.findMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        select: { googleEventId: true },
+      }),
+      this.prismaDb.revisaoProgramada.findMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        select: { googleEventId: true },
+      }),
+    ]);
+
+    const slotEventIds = slots
+      .map((s) => s.googleEventId)
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+    const revisaoEventIds = revisoes
+      .map((r) => r.googleEventId)
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+
+    // Best-effort: tenta apagar no Google (se falhar, segue adiante).
+    await Promise.all([
+      this.deleteSlotEventsByEventIds(userId, slotEventIds),
+      this.deleteRevisionEventsByEventIds(userId, revisaoEventIds),
+    ]);
+
+    // Zera os IDs locais para forçar recriação.
+    await this.prismaDb.$transaction([
+      this.prismaDb.slotCronograma.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+      this.prismaDb.revisaoProgramada.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+    ]);
+
+    await this.syncAllForUser(userId);
+  }
+
   async syncSlotsForUser(userId: number): Promise<void> {
     const client = await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
@@ -611,8 +675,8 @@ export class GoogleCalendarService {
     let dataAlvo = addDays(inicioSemana, offset);
     if (dataAlvo < hoje) dataAlvo = addDays(dataAlvo, 7);
 
-    const startDate = formatISODate(dataAlvo);
-    const endDate = formatISODate(addDays(dataAlvo, 1));
+    const startDate = formatGoogleAllDayDate(dataAlvo);
+    const endDate = formatGoogleAllDayDate(addDays(dataAlvo, 1));
 
     const summary = `Cronograma: ${slot.tema.tema}`;
     const byDay = diaSemanaToByDay(slot.diaSemana);
@@ -661,8 +725,10 @@ export class GoogleCalendarService {
         throw dbErr;
       }
     } catch (e) {
+      const status = getNested(e, 'response', 'status');
+      const data = getNested(e, 'response', 'data');
       this.logger.warn(
-        `Falha ao upsert slot ${slot.id} no Google Calendar (user ${userId}): ${String(e)}`,
+        `Falha ao upsert slot ${slot.id} no Google Calendar (user ${userId}): ${String(e)}${typeof status === 'number' ? ` (status ${status})` : ''}${data ? ` - ${JSON.stringify(data)}` : ''}`,
       );
     }
   }
@@ -812,8 +878,8 @@ export class GoogleCalendarService {
     },
   ) {
     const data = startOfDay(revisao.dataRevisao);
-    const startDate = formatISODate(data);
-    const endDate = formatISODate(addDays(data, 1));
+    const startDate = formatGoogleAllDayDate(data);
+    const endDate = formatGoogleAllDayDate(addDays(data, 1));
 
     const tema = revisao.registroOrigem.tema?.tema ?? 'Tema';
     const summary = `Revisão: ${tema}`;
@@ -859,8 +925,10 @@ export class GoogleCalendarService {
         throw dbErr;
       }
     } catch (e) {
+      const status = getNested(e, 'response', 'status');
+      const data = getNested(e, 'response', 'data');
       this.logger.warn(
-        `Falha ao upsert revisão ${revisao.id} no Google Calendar (user ${userId}): ${String(e)}`,
+        `Falha ao upsert revisão ${revisao.id} no Google Calendar (user ${userId}): ${String(e)}${typeof status === 'number' ? ` (status ${status})` : ''}${data ? ` - ${JSON.stringify(data)}` : ''}`,
       );
     }
   }

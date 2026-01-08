@@ -30,6 +30,10 @@ describe('UsersService', () => {
     };
   };
   let baseUser: Usuario;
+  let googleCalendarMock: {
+    deleteSlotEventsByEventIds: jest.Mock;
+    deleteRevisionEventsByEventIds: jest.Mock;
+  };
 
   beforeEach(() => {
     prismaMock = {
@@ -43,7 +47,15 @@ describe('UsersService', () => {
       },
     };
 
-    service = new UsersService(prismaMock as unknown as PrismaService);
+    googleCalendarMock = {
+      deleteSlotEventsByEventIds: jest.fn(),
+      deleteRevisionEventsByEventIds: jest.fn(),
+    };
+
+    service = new UsersService(
+      prismaMock as unknown as PrismaService,
+      googleCalendarMock as any,
+    );
 
     baseUser = {
       id: 1,
@@ -53,9 +65,17 @@ describe('UsersService', () => {
       versaoToken: 'v1',
       primeiroDiaSemana: DiaSemana.Dom,
       planejamentoRevisoes: [],
+      maxSlotsPorDia: null,
+      slotAtrasoToleranciaDias: 0,
+      slotAtrasoMaxDias: 7,
+      revisaoAtrasoExpiraDias: null,
+      ofensivaAtual: 0,
+      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosUsados: 0,
+      ofensivaUltimoDiaAtivo: null,
+      ofensivaAtualizadaEm: new Date('2024-01-01T00:00:00.000Z'),
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       updatedAt: new Date('2024-01-01T00:00:00.000Z'),
-      isAdmin: false,
     };
 
     jest.spyOn(bcrypt, 'compare').mockReset();

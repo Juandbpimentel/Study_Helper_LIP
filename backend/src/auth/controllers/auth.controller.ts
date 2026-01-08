@@ -19,7 +19,7 @@ import { LoginRequestDto } from '../dtos/login-request.dto';
 import { ChangeUserPasswordDto } from '../dtos/change-user-password.dto';
 import { ChangeUserEmailDto } from '../dtos/change-user-email.dto';
 
-import { AuthenticatedRequest } from '../types';
+import { AuthenticatedRequest, LoginRequest } from '../types';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -108,7 +108,7 @@ export class AuthController {
   @Post('login')
   login(
     @Body() body: LoginRequestDto,
-    @Req() req: AuthenticatedRequest,
+    @Req() req: LoginRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
     const authResult = this.authService.loginFromGuard(req.user);
