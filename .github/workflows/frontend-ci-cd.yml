@@ -3,9 +3,6 @@ name: Frontend CI/CD Pipeline
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci-cd.yml"
 
 jobs:
   test-frontend-dev:

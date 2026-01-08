@@ -3,9 +3,6 @@ name: Frontend PR Check
 on:
   pull_request:
     branches: [main, dev]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-test-pr.yml"
 
 jobs:
   test-frontend-dev:

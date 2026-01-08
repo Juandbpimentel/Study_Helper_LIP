@@ -3,9 +3,6 @@ name: Backend CI/CD Pipeline
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-ci-cd.yml"
 
 jobs:
   test-backend-dev:
