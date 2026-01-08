@@ -33,6 +33,7 @@ import {
 } from '@nestjs/swagger';
 import { UserResponseDto } from './dto/user-response.dto';
 import { ListUsersQueryDto } from './dto/list-users.dto';
+import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -107,6 +108,38 @@ export class UsersController {
       );
     }
     return this.usersService.update(id, updateUserDto);
+  }
+
+  @ApiOperation({
+    summary: 'Atualizar preferências do cronograma/atraso',
+    description:
+      'Permite que o próprio usuário (ou um administrador) ajuste limites e regras de atraso do cronograma e revisões.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiBody({
+    type: UpdateUserPreferencesDto,
+    description: 'Preferências a serem atualizadas (parcial).',
+  })
+  @ApiOkResponse({
+    description: 'Preferências atualizadas com sucesso.',
+    type: UserResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'Usuário autenticado não possui permissão para alterar este perfil.',
+  })
+  @Patch(':id/preferences')
+  updatePreferences(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserPreferencesDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (req.user.id !== id && !req.user.isAdmin) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para atualizar este usuário',
+      );
+    }
+    return this.usersService.updatePreferences(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

@@ -212,6 +212,12 @@ export class RevisoesService {
     const db = tx ?? this.prisma;
     const hoje = startOfDay(new Date());
 
+    const prefs = await db.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { revisaoAtrasoExpiraDias: true },
+    });
+    const expiraDias = prefs?.revisaoAtrasoExpiraDias ?? null;
+
     await db.revisaoProgramada.updateMany({
       where: {
         creatorId: usuarioId,
@@ -220,6 +226,18 @@ export class RevisoesService {
       },
       data: { statusRevisao: StatusRevisao.Atrasada },
     });
+
+    if (expiraDias && expiraDias > 0) {
+      const limiteExpiracao = addDays(hoje, -expiraDias);
+      await db.revisaoProgramada.updateMany({
+        where: {
+          creatorId: usuarioId,
+          statusRevisao: StatusRevisao.Atrasada,
+          dataRevisao: { lt: limiteExpiracao },
+        },
+        data: { statusRevisao: StatusRevisao.Expirada },
+      });
+    }
 
     await db.revisaoProgramada.updateMany({
       where: {

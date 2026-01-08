@@ -51,7 +51,7 @@ export class RevisoesController {
     name: 'status',
     required: false,
     description: 'Filtra revisões por status atual.',
-    enum: ['Pendente', 'Concluida', 'Adiada', 'Atrasada'],
+    enum: ['Pendente', 'Concluida', 'Adiada', 'Atrasada', 'Expirada'],
   })
   @ApiQuery({
     name: 'dataInicial',

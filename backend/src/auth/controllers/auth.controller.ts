@@ -245,6 +245,10 @@ export class AuthController {
       versaoToken: req.user.versaoToken,
       primeiroDiaSemana: req.user.primeiroDiaSemana,
       planejamentoRevisoes: req.user.planejamentoRevisoes,
+      maxSlotsPorDia: req.user.maxSlotsPorDia ?? null,
+      slotAtrasoToleranciaDias: req.user.slotAtrasoToleranciaDias,
+      slotAtrasoMaxDias: req.user.slotAtrasoMaxDias,
+      revisaoAtrasoExpiraDias: req.user.revisaoAtrasoExpiraDias ?? null,
       createdAt: req.user.createdAt,
       updatedAt: req.user.updatedAt,
     };

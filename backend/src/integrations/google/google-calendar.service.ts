@@ -767,7 +767,10 @@ export class GoogleCalendarService {
     });
     if (!revisao) return;
 
-    if (revisao.statusRevisao === StatusRevisao.Concluida) {
+    if (
+      revisao.statusRevisao === StatusRevisao.Concluida ||
+      revisao.statusRevisao === StatusRevisao.Expirada
+    ) {
       if (revisao.googleEventId) {
         try {
           await client.calendar.events.delete({

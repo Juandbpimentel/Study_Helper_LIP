@@ -100,6 +100,7 @@ export class RegistrosService {
       where: { id: registroId, creatorId: usuarioId },
       include: {
         revisoesGeradas: { select: { googleEventId: true } },
+        revisaoConcluida: { select: { id: true } },
       },
     });
     if (!registro)
@@ -111,9 +112,27 @@ export class RegistrosService {
       .map((r) => r.googleEventId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-    // DB first: remove registro (revisões geradas devem cair por cascade em registroOrigem).
-    const removido = await this.prisma.registroEstudo.delete({
-      where: { id: registroId },
+    // Se esse registro concluiu uma revisão, reabre a revisão antes de apagar para não violar FK.
+    const revisoesParaRessincronizar: number[] = [];
+
+    const removido = await this.prisma.$transaction(async (tx) => {
+      const revisoesConcluidas = await tx.revisaoProgramada.findMany({
+        where: { creatorId: usuarioId, registroConclusaoId: registroId },
+        select: { id: true },
+      });
+
+      if (revisoesConcluidas.length) {
+        revisoesParaRessincronizar.push(...revisoesConcluidas.map((r) => r.id));
+        await tx.revisaoProgramada.updateMany({
+          where: { id: { in: revisoesConcluidas.map((r) => r.id) } },
+          data: { registroConclusaoId: null, statusRevisao: StatusRevisao.Pendente },
+        });
+      }
+
+      // DB first: remove registro (revisões geradas devem cair por cascade em registroOrigem).
+      return await tx.registroEstudo.delete({
+        where: { id: registroId },
+      });
     });
 
     // Fora da transação: best-effort para limpar eventos de revisões que foram removidas.
@@ -121,6 +140,14 @@ export class RegistrosService {
       await this.googleCalendar.deleteRevisionEventsByEventIds(
         usuarioId,
         eventIds,
+      );
+    }
+
+    if (revisoesParaRessincronizar.length) {
+      await Promise.all(
+        revisoesParaRessincronizar.map((id) =>
+          this.googleCalendar.syncRevisionById(usuarioId, id),
+        ),
       );
     }
 

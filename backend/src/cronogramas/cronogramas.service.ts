@@ -37,6 +37,8 @@ export class CronogramasService {
       where: { id: usuarioId },
       select: {
         primeiroDiaSemana: true,
+        slotAtrasoToleranciaDias: true,
+        slotAtrasoMaxDias: true,
       },
     });
     if (!usuario) throw new NotFoundException('Usuário não encontrado');
@@ -102,9 +104,17 @@ export class CronogramasService {
         (d) => d >= dataPrevista && d < proximaDataAlvo,
       );
 
+      const toleranciaDias = usuario.slotAtrasoToleranciaDias ?? 0;
+      const maxOverdueDays = usuario.slotAtrasoMaxDias ?? 7;
+      const dataVencimento = addDays(dataPrevista, toleranciaDias);
+      const diasAposVencimento = Math.floor(
+        (hoje.getTime() - dataVencimento.getTime()) / (24 * 60 * 60 * 1000),
+      );
+
       let status: SlotStatus = SLOT_STATUS.PENDENTE;
       if (concluidoNoCiclo) status = SLOT_STATUS.CONCLUIDO;
-      else if (dataPrevista < hoje) status = SLOT_STATUS.ATRASADO;
+      else if (diasAposVencimento > 0 && diasAposVencimento <= maxOverdueDays)
+        status = SLOT_STATUS.ATRASADO;
 
       return {
         id: slot.id,
@@ -131,6 +141,27 @@ export class CronogramasService {
 
   async upsert(usuarioId: number, dto: UpsertCronogramaDto) {
     const cronograma = await this.ensureCronograma(usuarioId);
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { maxSlotsPorDia: true },
+    });
+    if (!usuario) throw new NotFoundException('Usuário não encontrado');
+
+    if (usuario.maxSlotsPorDia && usuario.maxSlotsPorDia > 0) {
+      const contagemPorDia = new Map<string, number>();
+      for (const slot of dto.slots) {
+        const key = String(slot.diaSemana);
+        contagemPorDia.set(key, (contagemPorDia.get(key) ?? 0) + 1);
+      }
+      for (const [dia, qtd] of contagemPorDia.entries()) {
+        if (qtd > usuario.maxSlotsPorDia) {
+          throw new BadRequestException(
+            `Limite de ${usuario.maxSlotsPorDia} slots excedido para o dia ${dia}`,
+          );
+        }
+      }
+    }
 
     const temaIds = Array.from(new Set(dto.slots.map((slot) => slot.temaId)));
     if (temaIds.length) {
@@ -213,6 +244,36 @@ export class CronogramasService {
     await this.googleCalendar.syncSlotsForUser(usuarioId);
 
     return await this.obterCronogramaComStatus(usuarioId);
+  }
+
+  async removerSlot(usuarioId: number, slotId: number) {
+    const slot = await this.prisma.slotCronograma.findFirst({
+      where: { id: slotId, creatorId: usuarioId },
+      select: { id: true, googleEventId: true },
+    });
+    if (!slot) throw new NotFoundException('Slot não encontrado');
+
+    await this.prisma.$transaction(async (tx) => {
+      // Remover dependências que podem bloquear a deleção do slot.
+      await tx.revisaoProgramada.deleteMany({
+        where: { creatorId: usuarioId, slotCronogramaId: slotId },
+      });
+      await tx.registroEstudo.deleteMany({
+        where: { creatorId: usuarioId, slotId },
+      });
+
+      await tx.slotCronograma.delete({ where: { id: slotId } });
+    });
+
+    if (slot.googleEventId) {
+      await this.googleCalendar.deleteSlotEventsByEventIds(usuarioId, [
+        slot.googleEventId,
+      ]);
+    }
+
+    await this.googleCalendar.syncSlotsForUser(usuarioId);
+
+    return { id: slotId };
   }
 
   private async ensureCronograma(usuarioId: number) {
