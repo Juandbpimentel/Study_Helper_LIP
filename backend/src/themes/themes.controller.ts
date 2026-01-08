@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -26,12 +27,14 @@ import {
   ApiParam,
   ApiTags,
   ApiCreatedResponse,
+  ApiQuery,
 } from '@nestjs/swagger';
 import {
   ThemeDetailResponseDto,
   ThemeResponseDto,
   ThemeWithCountersResponseDto,
 } from './dto/theme-response.dto';
+import { ListThemesQueryDto } from './dto/list-themes.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Temas de Estudo')
@@ -69,9 +72,15 @@ export class ThemesController {
     type: ThemeWithCountersResponseDto,
     isArray: true,
   })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({ name: 'all', required: false, type: Boolean })
   @Get()
-  findAll(@Req() req: AuthenticatedRequest) {
-    return this.themesService.findAll(req.user.id);
+  findAll(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListThemesQueryDto,
+  ) {
+    return this.themesService.findAll(req.user.id, query);
   }
 
   @ApiOperation({

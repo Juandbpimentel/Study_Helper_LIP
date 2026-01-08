@@ -9,6 +9,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
 export class CreateRegistroDto {
   @ApiProperty({
@@ -66,7 +67,7 @@ export class CreateRegistroDto {
   dataEstudo?: string;
 }
 
-export class ListRegistrosQueryDto {
+export class ListRegistrosQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     description:
       'Filtra registros pela data informada (considera o dia inteiro)',

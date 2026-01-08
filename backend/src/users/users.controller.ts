@@ -1,22 +1,16 @@
 import {
-  Controller,
-  Get,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Param,
   ParseIntPipe,
-  UseGuards,
+  Patch,
+  Query,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { AdminGuard } from '@/auth/guards/admin.guard';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
-
-import { AuthenticatedRequest } from '@/auth/types';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -27,10 +21,22 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
+  ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AdminGuard } from '@/auth/guards/admin.guard';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { AuthenticatedRequest } from '@/auth/types';
+import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
+import { ListUsersQueryDto } from './dto/list-users.dto';
+import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UsersService } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -38,7 +44,10 @@ import { UserResponseDto } from './dto/user-response.dto';
 @ApiCookieAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly ofensivaService: OfensivaService,
+  ) {}
 
   @UseGuards(AdminGuard)
   @ApiOperation({
@@ -51,13 +60,33 @@ export class UsersController {
     type: UserResponseDto,
     isArray: true,
   })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Quando true, retorna sem paginação.',
+  })
   @ApiForbiddenResponse({
     description: 'Usuário autenticado não possui privilégios administrativos.',
   })
   @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: ListUsersQueryDto) {
+    return this.usersService.findAll(query);
+  }
+
+  @ApiOperation({
+    summary: 'Obter ofensiva do usuário logado',
+    description:
+      'Retorna o resumo de ofensiva/bloqueios do usuário autenticado. Útil para o front atualizar UI sem depender de outros endpoints.',
+  })
+  @ApiResponse({ status: 200, type: OfensivaDto })
+  @Get('me/ofensiva')
+  async meOfensiva(@Req() req: AuthenticatedRequest): Promise<OfensivaDto> {
+    const usuario = await this.usersService.findByIdOrThrow(req.user.id);
+    return this.ofensivaService.fromUsuario(usuario);
   }
 
   @ApiOperation({
@@ -105,6 +134,38 @@ export class UsersController {
       );
     }
     return this.usersService.update(id, updateUserDto);
+  }
+
+  @ApiOperation({
+    summary: 'Atualizar preferências do cronograma/atraso',
+    description:
+      'Permite que o próprio usuário (ou um administrador) ajuste limites e regras de atraso do cronograma e revisões.',
+  })
+  @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
+  @ApiBody({
+    type: UpdateUserPreferencesDto,
+    description: 'Preferências a serem atualizadas (parcial).',
+  })
+  @ApiOkResponse({
+    description: 'Preferências atualizadas com sucesso.',
+    type: UserResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description:
+      'Usuário autenticado não possui permissão para alterar este perfil.',
+  })
+  @Patch(':id/preferences')
+  updatePreferences(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserPreferencesDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (req.user.id !== id && !req.user.isAdmin) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para atualizar este usuário',
+      );
+    }
+    return this.usersService.updatePreferences(id, dto);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

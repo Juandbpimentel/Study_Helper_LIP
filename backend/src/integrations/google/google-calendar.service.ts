@@ -696,6 +696,34 @@ export class GoogleCalendarService {
     );
   }
 
+  async deleteRevisionEventsByEventIds(
+    userId: number,
+    eventIds: string[],
+  ): Promise<void> {
+    const client = await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: false,
+    });
+    if (!client) return;
+
+    await Promise.all(
+      eventIds
+        .filter((id) => typeof id === 'string' && id.length > 0)
+        .map(async (eventId) => {
+          try {
+            await client.calendar.events.delete({
+              calendarId: client.calendarId,
+              eventId,
+            });
+          } catch (e) {
+            this.logger.warn(
+              `Falha ao deletar eventId ${eventId} (user ${userId}): ${String(e)}`,
+            );
+          }
+        }),
+    );
+  }
+
   async syncOpenRevisionsForUser(userId: number): Promise<void> {
     const client = await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
@@ -739,7 +767,10 @@ export class GoogleCalendarService {
     });
     if (!revisao) return;
 
-    if (revisao.statusRevisao === StatusRevisao.Concluida) {
+    if (
+      revisao.statusRevisao === StatusRevisao.Concluida ||
+      revisao.statusRevisao === StatusRevisao.Expirada
+    ) {
       if (revisao.googleEventId) {
         try {
           await client.calendar.events.delete({

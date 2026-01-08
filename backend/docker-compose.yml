@@ -1,7 +1,7 @@
 services:
     postgres:
         image: postgres:16-alpine
-        container_name: studyhelper-postgres
+        container_name: studyhelper-backend-postgres
         restart: unless-stopped
         environment:
             POSTGRES_DB: ${POSTGRES_DB:-studyhelper}
@@ -19,7 +19,7 @@ services:
 
     pgadmin:
         image: dpage/pgadmin4:latest
-        container_name: studyhelper-pgadmin
+        container_name: studyhelper-backend-pgadmin
         restart: unless-stopped
         environment:
             PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@studyhelper.com}
@@ -30,6 +30,29 @@ services:
             - postgres
         volumes:
             - pgadmin_data:/var/lib/pgadmin
+    
+    # PDF microservice (opcional). Para subir, use: docker compose --profile pdf up
+    pdf-redis:
+        image: redis:7-alpine
+        container_name: studyhelper-backend-pdf-redis
+        restart: unless-stopped
+        profiles: ["pdf"]
+
+    pdf-microservice:
+        image: ${PDF_IMAGE:-juandbpimentel/pdf-microservice:latest}
+        container_name: studyhelper-backend-pdf-microservice
+        restart: unless-stopped
+        profiles: ["pdf"]
+        depends_on:
+            - pdf-redis
+        environment:
+            PORT: ${PDF_PORT:-3000}
+            REDIS_URL: ${REDIS_URL:-redis://pdf-redis:6379}
+            ALLOWED_ORIGINS: ${PDF_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080, http://backend:8080, http://studyhelper-backend:8080}
+            MAX_RETRIES: ${PDF_MAX_RETRIES:-3}
+            PDF_SERVICE_PUBLIC_API_URL: ${PDF_SERVICE_PUBLIC_API_URL:-http://localhost:${PDF_PORT:-3005}}
+        ports:
+            - "${PDF_PORT:-3005}:3000"
 
 volumes:
     postgres_data:
