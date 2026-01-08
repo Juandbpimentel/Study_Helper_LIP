@@ -10,6 +10,73 @@ describe('CronogramasService', () => {
     jest.restoreAllMocks();
   });
 
+  it('obterCronogramaComStatus: dataAlvo não pode ser anterior ao createdAt do slot', async () => {
+    const cronogramaFindUnique = jest
+      .fn<
+        Promise<{ id: number; creatorId: number } | null>,
+        [Prisma.CronogramaSemanalFindUniqueArgs]
+      >()
+      .mockResolvedValue({ id: 10, creatorId: 2 });
+
+    const usuarioFindUnique = jest
+      .fn<
+        Promise<{
+          primeiroDiaSemana: DiaSemana;
+          slotAtrasoToleranciaDias: number;
+          slotAtrasoMaxDias: number;
+        } | null>,
+        [Prisma.UsuarioFindUniqueArgs]
+      >()
+      .mockResolvedValue({
+        primeiroDiaSemana: 'Dom' as DiaSemana,
+        slotAtrasoToleranciaDias: 0,
+        slotAtrasoMaxDias: 7,
+      });
+
+    const slotFindMany = jest
+      .fn<Promise<any[]>, [Prisma.SlotCronogramaFindManyArgs]>()
+      .mockResolvedValue([
+        {
+          id: 1,
+          diaSemana: 'Seg' as DiaSemana,
+          ordem: 0,
+          createdAt: new Date('2026-01-08T14:46:04.101Z'),
+          tema: { id: 1, tema: 'IA' },
+        },
+      ]);
+
+    const registroFindMany = jest
+      .fn<Promise<any[]>, [Prisma.RegistroEstudoFindManyArgs]>()
+      .mockResolvedValue([]);
+
+    const prisma = {
+      usuario: { findUnique: usuarioFindUnique },
+      cronogramaSemanal: { findUnique: cronogramaFindUnique },
+      slotCronograma: { findMany: slotFindMany },
+      registroEstudo: { findMany: registroFindMany },
+    } as unknown as PrismaService;
+
+    const googleCalendar = {} as unknown as GoogleCalendarService;
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
+
+    const result = await service.obterCronogramaComStatus(
+      2,
+      '2026-01-08T15:43:01.807Z',
+    );
+
+    expect(result.cronograma.slots).toHaveLength(1);
+    expect(result.cronograma.slots[0].createdAt).toBe(
+      '2026-01-08T14:46:04.101Z',
+    );
+    expect(result.cronograma.slots[0].dataAlvo).toBe(
+      '2026-01-12T00:00:00.000Z',
+    );
+    expect(result.cronograma.slots[0].status).toBe('pendente');
+  });
+
   it('upsert: lança NotFound quando usuário não existe', async () => {
     const cronogramaFindUnique = jest
       .fn<
@@ -31,7 +98,10 @@ describe('CronogramasService', () => {
     } as unknown as PrismaService;
 
     const googleCalendar = {} as unknown as GoogleCalendarService;
-    const service = new CronogramasService(prisma, googleCalendar);
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
 
     const dto: UpsertCronogramaDto = {
       slots: [],
@@ -63,7 +133,10 @@ describe('CronogramasService', () => {
     } as unknown as PrismaService;
 
     const googleCalendar = {} as unknown as GoogleCalendarService;
-    const service = new CronogramasService(prisma, googleCalendar);
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
 
     const dto: UpsertCronogramaDto = {
       slots: [
@@ -103,7 +176,10 @@ describe('CronogramasService', () => {
     } as unknown as PrismaService;
 
     const googleCalendar = {} as unknown as GoogleCalendarService;
-    const service = new CronogramasService(prisma, googleCalendar);
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
 
     const dto: UpsertCronogramaDto = {
       slots: [
@@ -203,7 +279,10 @@ describe('CronogramasService', () => {
       syncSlotsForUser,
     };
 
-    const service = new CronogramasService(prisma, googleCalendar);
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
 
     type Status = Awaited<
       ReturnType<CronogramasService['obterCronogramaComStatus']>
