@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -50,7 +51,7 @@ export class RevisoesController {
     name: 'status',
     required: false,
     description: 'Filtra revisões por status atual.',
-    enum: ['Pendente', 'Concluida', 'Adiada', 'Atrasada'],
+    enum: ['Pendente', 'Concluida', 'Adiada', 'Atrasada', 'Expirada'],
   })
   @ApiQuery({
     name: 'dataInicial',
@@ -65,6 +66,14 @@ export class RevisoesController {
     description: 'Data final (inclusive) para o filtro em formato ISO.',
     type: String,
     format: 'date-time',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Quando true, retorna sem paginação.',
   })
   @ApiOkResponse({
     description: 'Lista de revisões retornada com sucesso.',
@@ -83,6 +92,29 @@ export class RevisoesController {
     @Query() query: ListarRevisoesQueryDto,
   ) {
     return this.revisoesService.listar(req.user.id, query);
+  }
+
+  @ApiOperation({
+    summary: 'Remover revisão programada',
+    description:
+      'Exclui a revisão programada selecionada. Não remove registros já realizados.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador da revisão',
+    example: 10,
+  })
+  @ApiOkResponse({ description: 'Revisão removida com sucesso.' })
+  @ApiNotFoundResponse({
+    description: 'Revisão não encontrada para o usuário.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @Delete(':id')
+  remover(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.revisoesService.remover(req.user.id, id);
   }
 
   @ApiOperation({

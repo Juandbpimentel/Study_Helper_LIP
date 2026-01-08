@@ -46,6 +46,37 @@ export class UserResponseDto {
   planejamentoRevisoes!: number[];
 
   @ApiProperty({
+    description: 'Limite máximo de slots por dia da semana (quando definido).',
+    required: false,
+    nullable: true,
+    example: 5,
+  })
+  maxSlotsPorDia!: number | null;
+
+  @ApiProperty({
+    description:
+      'Dias de tolerância após a data prevista antes de marcar um slot como atrasado.',
+    example: 0,
+  })
+  slotAtrasoToleranciaDias!: number;
+
+  @ApiProperty({
+    description:
+      'Quantidade máxima de dias que um slot permanece como atrasado antes de voltar para pendente.',
+    example: 7,
+  })
+  slotAtrasoMaxDias!: number;
+
+  @ApiProperty({
+    description:
+      'Dias após a data da revisão para ela expirar. Quando null, revisões atrasadas não expiram.',
+    required: false,
+    nullable: true,
+    example: 30,
+  })
+  revisaoAtrasoExpiraDias!: number | null;
+
+  @ApiProperty({
     description: 'Data de criação do usuário',
     type: String,
     format: 'date-time',
