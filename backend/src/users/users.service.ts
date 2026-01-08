@@ -37,7 +37,11 @@ export class UsersService {
     });
   }
 
-  async findAll(query?: ListUsersQueryDto): Promise<Usuario[] | any> {
+  async findAll(
+    query?: ListUsersQueryDto,
+  ): Promise<
+    Usuario[] | { items: Usuario[]; meta: ReturnType<typeof buildMeta> }
+  > {
     if (!query || !shouldPaginate(query)) {
       return await this.prisma.usuario.findMany();
     }

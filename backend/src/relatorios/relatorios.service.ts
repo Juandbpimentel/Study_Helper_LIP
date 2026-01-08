@@ -12,14 +12,21 @@ import {
   startOfDay,
 } from '@/common/utils/date.utils';
 import { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
+import { calcularOfensivaPorDiasAtivos } from '@/common/utils/streak.utils';
+import { MetricsService } from '@/common/services/metrics.service';
 
 @Injectable()
 export class RelatoriosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   async resumo(usuarioId: number, query?: ResumoRelatorioQueryDto) {
     const hoje = startOfDay(new Date());
     const amanha = addDays(hoje, 1);
+
+    const ofensiva = await this.calcularOfensiva(usuarioId);
 
     const dataInicial = query?.dataInicial
       ? parseISODate(query.dataInicial)
@@ -76,40 +83,9 @@ export class RelatoriosService {
       (!inicioPeriodo || hoje >= inicioPeriodo) &&
       (!fimPeriodoExclusive || hoje < fimPeriodoExclusive);
 
-    const [
-      registrosAgg,
-      registrosPorTipo,
-      revisoesConcluidas,
-      revisoesPendentes,
-      revisoesAtrasadas,
-      revisoesExpiradas,
-    ] = await Promise.all([
-      this.prisma.registroEstudo.aggregate({
-        where: whereRegistros,
-        _count: { _all: true },
-        _sum: { tempoDedicado: true },
-      }),
-      this.prisma.registroEstudo.groupBy({
-        by: ['tipoRegistro'],
-        where: whereRegistros,
-        _count: { _all: true },
-        _sum: { tempoDedicado: true },
-      }),
-      this.prisma.revisaoProgramada.count({
-        where: { ...whereRevisoes, statusRevisao: StatusRevisao.Concluida },
-      }),
-      this.prisma.revisaoProgramada.count({
-        where: {
-          ...whereRevisoes,
-          statusRevisao: { in: [StatusRevisao.Pendente, StatusRevisao.Adiada] },
-        },
-      }),
-      this.prisma.revisaoProgramada.count({
-        where: { ...whereRevisoes, statusRevisao: StatusRevisao.Atrasada },
-      }),
-      this.prisma.revisaoProgramada.count({
-        where: { ...whereRevisoes, statusRevisao: StatusRevisao.Expirada },
-      }),
+    const [registroStats, revisaoStats] = await Promise.all([
+      this.metrics.getRegistroStats(whereRegistros),
+      this.metrics.getRevisaoStats(whereRevisoes),
     ]);
 
     const revisoesDoDia = dentroDoPeriodoHoje
@@ -124,100 +100,45 @@ export class RelatoriosService {
         })
       : 0;
 
-    const diasComEstudo = await this.calcularDiasComEstudo(whereRegistros);
-    const tempoTotal = registrosAgg._sum.tempoDedicado ?? 0;
+    const diasComEstudo = registroStats.diasComAtividade;
+    const tempoTotal = registroStats.tempoTotalMin;
     const tempoMedioPorDiaAtivo =
       diasComEstudo > 0 ? tempoTotal / diasComEstudo : 0;
 
-    const desempenhoPorTema = await this.calcularTopTemas(whereRegistros);
-
-    const registrosPorTipoFormatado = registrosPorTipo.map((r) => ({
-      tipoRegistro: r.tipoRegistro,
-      quantidade: r._count._all,
-      tempoTotal: r._sum.tempoDedicado ?? 0,
-    }));
+    const desempenhoPorTema = await this.metrics.getTopTemas(whereRegistros);
 
     return {
       periodo: {
         dataInicial: inicioPeriodo ? formatISODate(inicioPeriodo) : null,
         dataFinal: dataFinal ? formatISODate(startOfDay(dataFinal)) : null,
       },
-      totalEstudos: registrosAgg._count._all,
+      ofensiva,
+      totalEstudos: registroStats.totalRegistros,
       tempoTotalEstudado: tempoTotal,
       diasComEstudo,
       tempoMedioPorDiaAtivo,
-      registrosPorTipo: registrosPorTipoFormatado,
-      revisoesConcluidas,
-      revisoesPendentes,
-      revisoesAtrasadas,
-      revisoesExpiradas,
+      registrosPorTipo: registroStats.porTipo,
+      revisoesConcluidas: revisaoStats.concluidas,
+      revisoesPendentes: revisaoStats.pendentes,
+      revisoesAtrasadas: revisaoStats.atrasadas,
+      revisoesExpiradas: revisaoStats.expiradas,
       revisoesHoje: revisoesDoDia,
       desempenhoPorTema,
     };
   }
 
-  private async calcularDiasComEstudo(where: Prisma.RegistroEstudoWhereInput) {
+  private async calcularOfensiva(usuarioId: number) {
+    const hoje = startOfDay(new Date());
+    const inicio = addDays(hoje, -400);
     const registros = await this.prisma.registroEstudo.findMany({
-      where,
+      where: { creatorId: usuarioId, dataEstudo: { gte: inicio } },
+      orderBy: { dataEstudo: 'desc' },
       select: { dataEstudo: true },
     });
 
-    const dias = new Set<string>();
-    for (const r of registros) {
-      dias.add(formatISODate(startOfDay(r.dataEstudo)));
-    }
-
-    return dias.size;
-  }
-
-  private async calcularTopTemas(whereBase: Prisma.RegistroEstudoWhereInput) {
-    const registros = await this.prisma.registroEstudo.findMany({
-      where: { ...whereBase, temaId: { not: null } },
-      select: { temaId: true, tempoDedicado: true },
-    });
-
-    const acumulado = new Map<
-      number,
-      { temaId: number; quantidadeEstudos: number; tempoTotal: number }
-    >();
-
-    for (const registro of registros) {
-      if (registro.temaId === null) continue;
-      const atual = acumulado.get(registro.temaId);
-      if (atual) {
-        atual.quantidadeEstudos += 1;
-        atual.tempoTotal += registro.tempoDedicado;
-        continue;
-      }
-      acumulado.set(registro.temaId, {
-        temaId: registro.temaId,
-        quantidadeEstudos: 1,
-        tempoTotal: registro.tempoDedicado,
-      });
-    }
-
-    const ordenados = Array.from(acumulado.values())
-      .sort((a, b) => b.quantidadeEstudos - a.quantidadeEstudos)
-      .slice(0, 5);
-
-    const temas = ordenados.length
-      ? await this.prisma.temaDeEstudo.findMany({
-          where: { id: { in: ordenados.map((item) => item.temaId) } },
-          select: { id: true, tema: true, cor: true },
-        })
-      : [];
-
-    const temaMap = new Map(temas.map((tema) => [tema.id, tema]));
-
-    return ordenados.map((item) => {
-      const tema = temaMap.get(item.temaId);
-      return {
-        temaId: item.temaId,
-        tema: tema?.tema ?? 'Tema removido',
-        cor: tema?.cor ?? null,
-        quantidadeEstudos: item.quantidadeEstudos,
-        tempoTotal: item.tempoTotal,
-      };
-    });
+    return calcularOfensivaPorDiasAtivos(
+      registros.map((r) => r.dataEstudo),
+      2,
+    );
   }
 }

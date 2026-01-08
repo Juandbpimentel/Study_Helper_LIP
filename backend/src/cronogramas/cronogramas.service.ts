@@ -9,7 +9,6 @@ import { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
 import {
   addDays,
   endOfWeek,
-  formatISODate,
   getOffsetFromFirstDay,
   parseISODate,
   startOfDay,
