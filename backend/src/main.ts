@@ -17,6 +17,17 @@ async function bootstrap() {
   );
 
   const port = Number(process.env.PORT ?? 8080);
+
+  const normalizeOrigin = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+      return new URL(trimmed).origin;
+    } catch {
+      return trimmed.replace(/\/+$/g, '');
+    }
+  };
+
   const tempAllowedOrigins: string[] = [];
   tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
   tempAllowedOrigins.push(process.env.PUBLIC_API_URL || '');
@@ -26,8 +37,13 @@ async function bootstrap() {
     tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
     tempAllowedOrigins.push('https://hoppscotch.io');
   }
-  const allowedOrigins: string[] = tempAllowedOrigins.filter(
-    (origin) => origin && origin.length > 0,
+
+  const allowedOrigins = Array.from(
+    new Set(
+      tempAllowedOrigins
+        .map((origin) => normalizeOrigin(origin) ?? '')
+        .filter((origin) => origin.length > 0),
+    ),
   );
 
   console.log('CORS allowed origins:', allowedOrigins);
@@ -41,11 +57,16 @@ async function bootstrap() {
         callback(null, true);
         return;
       }
-      if (allowedOrigins.includes(origin)) {
+
+      const normalizedRequestOrigin = normalizeOrigin(origin) ?? origin;
+      if (allowedOrigins.includes(normalizedRequestOrigin)) {
         callback(null, true);
         return;
       }
-      callback(new Error('Origin not allowed by CORS'));
+
+      // Não derruba a API com 500 quando a origem não é permitida.
+      // Sem os headers de CORS, o browser bloqueia a resposta naturalmente.
+      callback(null, false);
     },
     credentials: true, // CRÍTICO: Permite envio de cookies
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
