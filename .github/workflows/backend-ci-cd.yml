@@ -3,11 +3,26 @@ name: Backend CI/CD Pipeline
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-ci-cd.yml"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+
   test-backend-dev:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev'
@@ -119,9 +134,9 @@ jobs:
         run: npm test
 
   deploy-backend-dev:
-    needs: [test-backend-dev]
+    needs: [test-backend-dev, changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     environment:
       name: development
     steps:
@@ -132,9 +147,9 @@ jobs:
             -d '{"environment": "dev", "version": "${{ github.sha }}", "branch": "dev"}'
 
   deploy-backend-prod:
-    needs: [test-backend-prod]
+    needs: [test-backend-prod, changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     environment:
       name: production
     steps:

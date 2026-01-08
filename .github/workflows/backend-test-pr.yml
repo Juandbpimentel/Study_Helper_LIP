@@ -3,9 +3,6 @@ name: Backend PR Check
 on:
   pull_request:
     branches: [main, dev]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-test-pr.yml"
 
 jobs:
   test-backend-dev:

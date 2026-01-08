@@ -9,6 +9,8 @@ import { CronogramasModule } from '@/cronogramas/cronogramas.module';
 import { RegistrosModule } from '@/registros/registros.module';
 import { RevisoesModule } from '@/revisoes/revisoes.module';
 import { RelatoriosModule } from '@/relatorios/relatorios.module';
+import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
+import { PublicController } from './public/public.controller';
 
 @Module({
   imports: [
@@ -20,8 +22,9 @@ import { RelatoriosModule } from '@/relatorios/relatorios.module';
     RegistrosModule,
     RevisoesModule,
     RelatoriosModule,
+    GoogleIntegrationsModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, PublicController],
   providers: [AppService],
 })
 export class AppModule {}

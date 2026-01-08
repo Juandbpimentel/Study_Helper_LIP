@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { RegistrosService } from '@/registros/registros.service';
 import { ConcluirRevisaoDto } from './dto/concluir-revisao.dto';
 import { AdiarRevisaoDto } from './dto/adiar-revisao.dto';
@@ -17,6 +18,7 @@ import { addDays, parseISODate, startOfDay } from '@/common/utils/date.utils';
 export class RevisoesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly googleCalendar: GoogleCalendarService,
     @Inject(forwardRef(() => RegistrosService))
     private readonly registrosService: RegistrosService,
   ) {}
@@ -73,40 +75,47 @@ export class RevisoesService {
     revisaoId: number,
     dto: ConcluirRevisaoDto,
   ) {
-    const revisao = await this.prisma.revisaoProgramada.findFirst({
-      where: { id: revisaoId, creatorId: usuarioId },
-      include: {
-        registroOrigem: {
-          select: {
-            temaId: true,
-            slotId: true,
+    const revisaoConcluida = await this.prisma.$transaction(async (tx) => {
+      const revisao = await tx.revisaoProgramada.findFirst({
+        where: { id: revisaoId, creatorId: usuarioId },
+        include: {
+          registroOrigem: {
+            select: {
+              temaId: true,
+              slotId: true,
+            },
           },
         },
-      },
-    });
-    if (!revisao) {
-      throw new NotFoundException('Revisão programada não encontrada');
-    }
+      });
+      if (!revisao) {
+        throw new NotFoundException('Revisão programada não encontrada');
+      }
 
-    await this.registrosService.criar(usuarioId, {
-      tipoRegistro: TipoRegistro.Revisao,
-      tempoDedicado: dto.tempoDedicado,
-      conteudoEstudado: dto.conteudoEstudado,
-      dataEstudo: dto.dataEstudo,
-      revisaoProgramadaId: revisao.id,
-      temaId: revisao.registroOrigem.temaId ?? undefined,
-      slotId: revisao.registroOrigem.slotId ?? undefined,
+      await this.registrosService.criarComTx(tx, usuarioId, {
+        tipoRegistro: TipoRegistro.Revisao,
+        tempoDedicado: dto.tempoDedicado,
+        conteudoEstudado: dto.conteudoEstudado,
+        dataEstudo: dto.dataEstudo,
+        revisaoProgramadaId: revisao.id,
+        temaId: revisao.registroOrigem.temaId ?? undefined,
+        slotId: revisao.registroOrigem.slotId ?? undefined,
+      });
+
+      await this.atualizarStatusAutomatico(usuarioId, tx);
+
+      return await tx.revisaoProgramada.findUnique({
+        where: { id: revisao.id },
+        include: {
+          registroOrigem: true,
+          registroConclusao: true,
+        },
+      });
     });
 
-    await this.atualizarStatusAutomatico(usuarioId);
+    // Fora da transação: Deleta/atualiza evento no Google conforme status final.
+    await this.googleCalendar.syncRevisionById(usuarioId, revisaoId);
 
-    return await this.prisma.revisaoProgramada.findUnique({
-      where: { id: revisao.id },
-      include: {
-        registroOrigem: true,
-        registroConclusao: true,
-      },
-    });
+    return revisaoConcluida;
   }
 
   async adiar(usuarioId: number, revisaoId: number, dto: AdiarRevisaoDto) {
@@ -122,25 +131,35 @@ export class RevisoesService {
       throw new BadRequestException('Revisão concluída não pode ser adiada');
 
     const dataNormalizada = startOfDay(novaData);
-    await this.prisma.revisaoProgramada.update({
-      where: { id: revisaoId },
-      data: {
-        dataRevisao: dataNormalizada,
-        statusRevisao: StatusRevisao.Adiada,
-      },
+    const revisaoAtualizada = await this.prisma.$transaction(async (tx) => {
+      await tx.revisaoProgramada.update({
+        where: { id: revisaoId },
+        data: {
+          dataRevisao: dataNormalizada,
+          statusRevisao: StatusRevisao.Adiada,
+        },
+      });
+
+      await this.atualizarStatusAutomatico(usuarioId, tx);
+
+      return await tx.revisaoProgramada.findUnique({
+        where: { id: revisaoId },
+      });
     });
 
-    await this.atualizarStatusAutomatico(usuarioId);
+    await this.googleCalendar.syncRevisionById(usuarioId, revisaoId);
 
-    return await this.prisma.revisaoProgramada.findUnique({
-      where: { id: revisaoId },
-    });
+    return revisaoAtualizada;
   }
 
-  private async atualizarStatusAutomatico(usuarioId: number) {
+  private async atualizarStatusAutomatico(
+    usuarioId: number,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = tx ?? this.prisma;
     const hoje = startOfDay(new Date());
 
-    await this.prisma.revisaoProgramada.updateMany({
+    await db.revisaoProgramada.updateMany({
       where: {
         creatorId: usuarioId,
         statusRevisao: { in: [StatusRevisao.Pendente, StatusRevisao.Adiada] },
@@ -149,7 +168,7 @@ export class RevisoesService {
       data: { statusRevisao: StatusRevisao.Atrasada },
     });
 
-    await this.prisma.revisaoProgramada.updateMany({
+    await db.revisaoProgramada.updateMany({
       where: {
         creatorId: usuarioId,
         statusRevisao: StatusRevisao.Atrasada,

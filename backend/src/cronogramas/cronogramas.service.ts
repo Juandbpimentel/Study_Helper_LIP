@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
 import {
   addDays,
@@ -26,7 +27,10 @@ type SlotStatus = (typeof SLOT_STATUS)[keyof typeof SLOT_STATUS];
 
 @Injectable()
 export class CronogramasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleCalendar: GoogleCalendarService,
+  ) {}
 
   async obterCronogramaComStatus(usuarioId: number, referenciaIso?: string) {
     const usuario = await this.prisma.usuario.findUnique({
@@ -119,10 +123,12 @@ export class CronogramasService {
       }
     }
 
+    let eventIdsParaRemover: string[] = [];
+
     await this.prisma.$transaction(async (tx) => {
       const existentes = await tx.slotCronograma.findMany({
         where: { cronogramaId: cronograma.id, creatorId: usuarioId },
-        select: { id: true },
+        select: { id: true, googleEventId: true },
       });
       const existentesMap = new Map(existentes.map((slot) => [slot.id, slot]));
       const idsQuePermanecem = new Set<number>();
@@ -160,12 +166,29 @@ export class CronogramasService {
       const idsParaRemover = existentes
         .map((s) => s.id)
         .filter((id) => !idsQuePermanecem.has(id));
+
+      eventIdsParaRemover = existentes
+        .filter((s) => idsParaRemover.includes(s.id))
+        .map((s) => s.googleEventId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
       if (idsParaRemover.length) {
         await tx.slotCronograma.deleteMany({
           where: { id: { in: idsParaRemover } },
         });
       }
     });
+
+    // Fora da transação: chamadas externas para deletar eventos removidos.
+    if (eventIdsParaRemover.length) {
+      await this.googleCalendar.deleteSlotEventsByEventIds(
+        usuarioId,
+        eventIdsParaRemover,
+      );
+    }
+
+    // Sync incremental (upsert/ajustes) para slots existentes.
+    await this.googleCalendar.syncSlotsForUser(usuarioId);
 
     return await this.obterCronogramaComStatus(usuarioId);
   }

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -15,12 +16,18 @@ async function bootstrap() {
     }),
   );
 
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_URL_DEV,
-    process.env.FRONTEND_URL_PROD,
-    'http://localhost:3000',
-  ].filter(Boolean);
+  const port = Number(process.env.PORT ?? 8080);
+  const tempAllowedOrigins: string[] = [];
+  tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
+  if (process.env.NODE_ENV === 'development') {
+    tempAllowedOrigins.push('http://localhost:3000');
+    tempAllowedOrigins.push(`http://localhost:${port}`);
+    tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
+    tempAllowedOrigins.push('https://hoppscotch.io');
+  }
+  const allowedOrigins: string[] = tempAllowedOrigins.filter(
+    (origin) => origin && origin.length > 0,
+  );
 
   console.log('CORS allowed origins:', allowedOrigins);
 
@@ -44,8 +51,6 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
-
-  const port = process.env.PORT || 8080;
 
   const config = new DocumentBuilder()
     .setTitle('Study Helper API')
