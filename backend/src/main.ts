@@ -19,6 +19,7 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? 8080);
   const tempAllowedOrigins: string[] = [];
   tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
+  tempAllowedOrigins.push(process.env.PUBLIC_API_URL || '');
   if (process.env.NODE_ENV === 'development') {
     tempAllowedOrigins.push('http://localhost:3000');
     tempAllowedOrigins.push(`http://localhost:${port}`);
