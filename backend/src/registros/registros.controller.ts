@@ -55,6 +55,14 @@ export class RegistrosController {
     type: String,
     format: 'date-time',
   })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Quando true, retorna sem paginação.',
+  })
   @ApiOkResponse({
     description: 'Lista de registros retornada com sucesso.',
     type: RegistroListagemItemDto,

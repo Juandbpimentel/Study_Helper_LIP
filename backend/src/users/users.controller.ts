@@ -28,6 +28,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -53,6 +54,14 @@ export class UsersController {
     description: 'Lista de usuários retornada com sucesso.',
     type: UserResponseDto,
     isArray: true,
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Quando true, retorna sem paginação.',
   })
   @ApiForbiddenResponse({
     description: 'Usuário autenticado não possui privilégios administrativos.',

@@ -125,7 +125,10 @@ export class RegistrosService {
         revisoesParaRessincronizar.push(...revisoesConcluidas.map((r) => r.id));
         await tx.revisaoProgramada.updateMany({
           where: { id: { in: revisoesConcluidas.map((r) => r.id) } },
-          data: { registroConclusaoId: null, statusRevisao: StatusRevisao.Pendente },
+          data: {
+            registroConclusaoId: null,
+            statusRevisao: StatusRevisao.Pendente,
+          },
         });
       }
 

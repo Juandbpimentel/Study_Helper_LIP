@@ -6,7 +6,11 @@ import { AuthModule } from '@/auth/auth.module';
 import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AuthModule), GoogleIntegrationsModule],
+  imports: [
+    PrismaModule,
+    forwardRef(() => AuthModule),
+    GoogleIntegrationsModule,
+  ],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],
