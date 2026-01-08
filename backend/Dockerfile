@@ -13,9 +13,10 @@ COPY prisma ./prisma
 COPY tsconfig*.json nest-cli.json prisma.config.ts ./
 COPY src ./src
 
-RUN npx prisma db push
-RUN npx prisma db seed
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "run", "start:dev"]

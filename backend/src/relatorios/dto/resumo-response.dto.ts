@@ -69,7 +69,7 @@ export class ResumoRelatorioResponseDto {
 
   @ApiProperty({
     description:
-      'Resumo da ofensiva (streak) do usuário, com até 2 bloqueios (faltas toleradas entre dias ativos).',
+      'Resumo da ofensiva (streak) do usuário, com até 3 bloqueios (faltas toleradas entre dias ativos; revisões podem recuperar bloqueios).',
     type: () => OfensivaDto,
   })
   ofensiva!: OfensivaDto;

@@ -24,7 +24,7 @@ docker compose up --build
 
 Observações:
 
-- O compose aplica as migrations automaticamente com `prisma migrate deploy`.
+- O backend aplica as migrations automaticamente no startup (via entrypoint) com `prisma migrate deploy`.
 - Se você editar código, rode novamente com `docker compose up --build`.
 
 #### Variáveis de ambiente (Compose)
@@ -34,11 +34,18 @@ O `docker-compose.yml` da raiz aceita variáveis via `.env` na raiz do repositó
 ```env
 JWT_SECRET=dev_jwt_secret_change_me
 
+# Opcional: sobrescrever URLs do banco usadas dentro do Docker
+# (use estes nomes para evitar conflitos com DATABASE_URL/DIRECT_URL do seu sistema)
+DOCKER_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public
+DOCKER_DIRECT_URL=postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public
+
 # Opcional (Google Calendar)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_TOKEN_ENCRYPTION_KEY=
 ```
+
+Nota: se você tiver `DATABASE_URL`/`DIRECT_URL` setados no Windows (ex.: para rodar Prisma local), o Compose da raiz **não usa** esses nomes — ele usa `DOCKER_DATABASE_URL`/`DOCKER_DIRECT_URL`.
 
 Para ativar o microserviço PDF, use o profile `pdf` na hora de rodar o compose:
 
@@ -64,6 +71,8 @@ npm run start:dev
 ```
 
 API disponível em: http://localhost:8080
+
+> Dica: o `backend/docker-compose.yml` (compose local) expõe o backend em `http://localhost:8081` e o Postgres em `localhost:5433` por padrão, para não conflitar com o compose da raiz.
 
 ### Frontend
 

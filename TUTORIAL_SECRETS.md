@@ -1,5 +1,7 @@
 ### Backend – GitHub Actions
 
+> Nota (Docker Compose): para rodar local com Docker, use `DOCKER_DATABASE_URL`/`DOCKER_DIRECT_URL` no compose da raiz e `LOCAL_DATABASE_URL`/`LOCAL_DIRECT_URL` no compose dentro de `backend/`. Em CI/Render continuam sendo `DATABASE_URL`/`DIRECT_URL`.
+
 #### Development
 
 - Secrets:
