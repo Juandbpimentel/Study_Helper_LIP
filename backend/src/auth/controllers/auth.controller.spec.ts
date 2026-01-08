@@ -31,6 +31,13 @@ describe('AuthController', () => {
     },
   };
 
+  const googleBackendStatus = {
+    enabled: false,
+    oauthConfigured: false,
+    encryptionKeyConfigured: false,
+    issues: ['GOOGLE_CLIENT_ID ausente'],
+  };
+
   let loginMock: jest.MockedFunction<
     (this: void, dto: LoginRequestDto) => Promise<typeof authResult>
   >;
@@ -111,6 +118,7 @@ describe('AuthController', () => {
 
     const googleCalendarMock = {
       verifyAccessAndCleanupIfRevoked: jest.fn().mockResolvedValue(true),
+      getBackendStatus: jest.fn().mockReturnValue(googleBackendStatus),
     } as unknown as jest.Mocked<Partial<any>>;
 
     controller = new AuthController(
@@ -151,6 +159,7 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Login Realizado com Sucesso',
       ...authResult,
+      googleCalendar: googleBackendStatus,
     });
   });
 
@@ -175,6 +184,7 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Usuário registrado com sucesso',
       ...authResult,
+      googleCalendar: googleBackendStatus,
     });
   });
 

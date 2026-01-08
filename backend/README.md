@@ -31,10 +31,12 @@ src/
 
 ### Pré-requisitos
 
-- Node.js 24+
+- Node.js 22+
 - Docker & Docker Compose
 
 ### Passo a Passo
+
+> Dica: para subir **Postgres + Backend + Frontend** com 1 comando, use o Docker Compose da raiz do repositório (veja o [README principal](../README.md)).
 
 1.  **Configurar Variáveis de Ambiente:**
     Crie um arquivo `.env` na raiz do diretório `backend`:
@@ -42,6 +44,7 @@ src/
     ```env
     DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studyhelper?schema=public"
     PORT=8080
+    FRONTEND_URL=http://localhost:3000
     ```
 
     Se for usar a integração com **Google Calendar**, adicione também:
@@ -77,6 +80,14 @@ src/
     npm run start:dev
     ```
     A API estará disponível em: `http://localhost:8080`
+
+### Prisma Studio (opcional)
+
+Com o banco rodando, você pode abrir o Prisma Studio:
+
+```bash
+npx prisma studio
+```
 
 ## 🧪 Testes e Qualidade
 
