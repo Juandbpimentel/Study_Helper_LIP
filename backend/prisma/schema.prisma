@@ -27,7 +27,29 @@ model Usuario {
   updatedAt       DateTime         @updatedAt @map("updated_at")
   slotCronogramas SlotCronograma[]
 
+  googleCalendarIntegration GoogleCalendarIntegration?
+
   @@map("usuarios")
+}
+
+model GoogleCalendarIntegration {
+  id Int @id @default(autoincrement())
+
+  usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId Int     @unique
+
+  calendarId String? @map("calendar_id")
+
+  accessToken           String?   @map("access_token")
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  tokenType             String?   @map("token_type")
+  scope                 String?   @map("scope")
+  expiryDate            DateTime? @map("expiry_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("google_calendar_integrations")
 }
 
 model CronogramaSemanal {
@@ -64,6 +86,8 @@ model SlotCronograma {
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   revisaoProgramadas RevisaoProgramada[]
+
+  googleEventId String? @map("google_event_id")
 
   @@index([creatorId, diaSemana])
   @@map("slots_cronograma")
@@ -132,6 +156,8 @@ model RevisaoProgramada {
 
   usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   creatorId Int
+
+  googleEventId String? @map("google_event_id")
 
   @@index([creatorId, dataRevisao])
   @@map("revisoes")

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import {
   CreateRegistroDto,
   ListRegistrosQueryDto,
@@ -13,7 +14,10 @@ import { addDays, parseISODate, startOfDay } from '@/common/utils/date.utils';
 
 @Injectable()
 export class RegistrosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleCalendar: GoogleCalendarService,
+  ) {}
 
   async listar(usuarioId: number, query: ListRegistrosQueryDto) {
     const filtros: Prisma.RegistroEstudoWhereInput = {
@@ -45,67 +49,87 @@ export class RegistrosService {
   }
 
   async criar(usuarioId: number, dto: CreateRegistroDto) {
-    return await this.prisma.$transaction(async (tx) => {
-      const dataEstudo = dto.dataEstudo
-        ? parseISODate(dto.dataEstudo)
-        : new Date();
-      if (!dataEstudo) throw new BadRequestException('Data de estudo inválida');
+    const { registro, revisoesCriadasIds } = await this.prisma.$transaction(
+      async (tx) => this.criarComTx(tx, usuarioId, dto),
+    );
 
-      const tema = await this.buscarTema(tx, usuarioId, dto.temaId);
-      const slot = await this.buscarSlot(tx, usuarioId, dto.slotId);
-      const revisao = await this.buscarRevisao(
+    if (revisoesCriadasIds.length) {
+      await Promise.all(
+        revisoesCriadasIds.map((id) =>
+          this.googleCalendar.syncRevisionById(usuarioId, id),
+        ),
+      );
+    }
+
+    return registro;
+  }
+
+  async criarComTx(
+    tx: Prisma.TransactionClient,
+    usuarioId: number,
+    dto: CreateRegistroDto,
+  ) {
+    const dataEstudo = dto.dataEstudo
+      ? parseISODate(dto.dataEstudo)
+      : new Date();
+    if (!dataEstudo) throw new BadRequestException('Data de estudo inválida');
+
+    const tema = await this.buscarTema(tx, usuarioId, dto.temaId);
+    const slot = await this.buscarSlot(tx, usuarioId, dto.slotId);
+    const revisao = await this.buscarRevisao(
+      tx,
+      usuarioId,
+      dto.revisaoProgramadaId,
+    );
+
+    const temaIdFinal = this.validarRegrasDeNegocio(
+      dto.tipoRegistro,
+      tema?.id,
+      slot?.temaId,
+      revisao,
+    );
+
+    const registro = await tx.registroEstudo.create({
+      data: {
+        tempoDedicado: dto.tempoDedicado,
+        conteudoEstudado: dto.conteudoEstudado?.trim() ?? null,
+        tipoRegistro: dto.tipoRegistro,
+        dataEstudo,
+        temaId: temaIdFinal ?? null,
+        slotId: slot?.id ?? null,
+        creatorId: usuarioId,
+      },
+      include: {
+        tema: true,
+        slotCronograma: {
+          include: { tema: true },
+        },
+      },
+    });
+
+    if (dto.tipoRegistro === TipoRegistro.EstudoDeTema) {
+      const revisoesIds = await this.criarRevisoes(
         tx,
         usuarioId,
-        dto.revisaoProgramadaId,
+        registro.id,
+        registro.slotId,
+        dataEstudo,
       );
 
-      const temaIdFinal = this.validarRegrasDeNegocio(
-        dto.tipoRegistro,
-        tema?.id,
-        slot?.temaId,
-        revisao,
-      );
+      return { registro, revisoesCriadasIds: revisoesIds };
+    }
 
-      const registro = await tx.registroEstudo.create({
+    if (dto.tipoRegistro === TipoRegistro.Revisao && revisao) {
+      await tx.revisaoProgramada.update({
+        where: { id: revisao.id },
         data: {
-          tempoDedicado: dto.tempoDedicado,
-          conteudoEstudado: dto.conteudoEstudado?.trim() ?? null,
-          tipoRegistro: dto.tipoRegistro,
-          dataEstudo,
-          temaId: temaIdFinal ?? null,
-          slotId: slot?.id ?? null,
-          creatorId: usuarioId,
-        },
-        include: {
-          tema: true,
-          slotCronograma: {
-            include: { tema: true },
-          },
+          statusRevisao: StatusRevisao.Concluida,
+          registroConclusaoId: registro.id,
         },
       });
+    }
 
-      if (dto.tipoRegistro === TipoRegistro.EstudoDeTema) {
-        await this.criarRevisoes(
-          tx,
-          usuarioId,
-          registro.id,
-          registro.slotId,
-          dataEstudo,
-        );
-      }
-
-      if (dto.tipoRegistro === TipoRegistro.Revisao && revisao) {
-        await tx.revisaoProgramada.update({
-          where: { id: revisao.id },
-          data: {
-            statusRevisao: StatusRevisao.Concluida,
-            registroConclusaoId: registro.id,
-          },
-        });
-      }
-
-      return registro;
-    });
+    return { registro, revisoesCriadasIds: [] as number[] };
   }
 
   private validarRegrasDeNegocio(
@@ -233,7 +257,7 @@ export class RegistrosService {
 
     const dataBase = startOfDay(dataEstudo);
 
-    await Promise.all(
+    const created = await Promise.all(
       espacamentos.map((dias) =>
         tx.revisaoProgramada.create({
           data: {
@@ -242,8 +266,11 @@ export class RegistrosService {
             creatorId: usuarioId,
             slotCronogramaId: slotId,
           },
+          select: { id: true },
         }),
       ),
     );
+
+    return created.map((r) => r.id);
   }
 }

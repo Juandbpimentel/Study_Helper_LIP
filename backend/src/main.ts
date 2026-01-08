@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -15,11 +16,15 @@ async function bootstrap() {
     }),
   );
 
+  const port = Number(process.env.PORT ?? 8080);
+
   const allowedOrigins = [
     process.env.FRONTEND_URL,
     process.env.FRONTEND_URL_DEV,
     process.env.FRONTEND_URL_PROD,
     'http://localhost:3000',
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
   ].filter(Boolean);
 
   console.log('CORS allowed origins:', allowedOrigins);
@@ -44,8 +49,6 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
-
-  const port = process.env.PORT || 8080;
 
   const config = new DocumentBuilder()
     .setTitle('Study Helper API')

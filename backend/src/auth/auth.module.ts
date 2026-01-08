@@ -11,6 +11,7 @@ import { OwnershipGuard } from './guards/ownership.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { UsersModule } from '@/users/users.module';
 import { PrismaModule } from '@/prisma/prisma.module';
+import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PrismaModule } from '@/prisma/prisma.module';
 
     forwardRef(() => UsersModule),
     PrismaModule,
+    GoogleIntegrationsModule,
   ],
   controllers: [AuthController],
   providers: [

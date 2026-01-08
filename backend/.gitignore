@@ -59,3 +59,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Google OAuth client secrets (local only)
+google_calendar_client.json
+*google*_client*.json

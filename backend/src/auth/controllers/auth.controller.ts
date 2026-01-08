@@ -37,6 +37,7 @@ import {
   AuthSuccessResponseDto,
   LogoutResponseDto,
 } from '../dtos/auth-response.dto';
+import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 
 type CookieCapableResponse = Response & {
   cookie?: (name: string, val: string, options?: any) => void;
@@ -49,6 +50,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private usersService: UsersService,
+    private googleCalendar: GoogleCalendarService,
   ) {}
 
   private getOriginFromReq(req?: Request): string | undefined {
@@ -107,6 +109,9 @@ export class AuthController {
     const token = authResult[AUTH_COOKIE_NAME] as string;
     const origin = this.getOriginFromReq(req);
     this.setCookie(res, token, origin);
+
+    // Cleanup pós-login: se o usuário revogou acesso no Google, desfaz a integração no banco.
+    void this.googleCalendar.verifyAccessAndCleanupIfRevoked(req.user.id);
     return { message: 'Login Realizado com Sucesso', ...authResult };
   }
 
