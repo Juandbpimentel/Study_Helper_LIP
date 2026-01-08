@@ -5,6 +5,24 @@ on:
     branches: [main, dev]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+
   test-frontend-dev:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev'
@@ -83,9 +101,10 @@ jobs:
         run: npm test
 
   deploy-frontend-dev:
-    needs: [test-frontend-dev]
+    # Automatic DEV deploy disabled by request. Keep job here for reference or manual triggering later.
+    needs: [test-frontend-dev, changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    if: false # automatic DEV deploy disabled. Remove or change to 'true' / custom condition to re-enable
     environment:
       name: development
     defaults:
@@ -134,9 +153,9 @@ jobs:
           netlify deploy --dir=.next --prod --message "Deploy DEV - ${{ github.sha }}"
 
   deploy-frontend-prod:
-    needs: [test-frontend-prod]
+    needs: [test-frontend-prod, changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.changes.outputs.frontend == 'true'
     environment:
       name: production
     defaults:
