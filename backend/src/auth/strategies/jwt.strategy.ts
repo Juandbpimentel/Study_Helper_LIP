@@ -4,7 +4,11 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '@/users/users.service';
 import { Request } from 'express';
 import { AUTH_COOKIE_NAME } from '@/auth/auth.constants';
-import { Usuario } from '@prisma/client';
+
+type JwtPayload = {
+  id: number;
+  versaoToken: string;
+};
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -21,8 +25,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: Usuario): Promise<Usuario> {
-    const usuario = await this.usersService.findOne(payload.id);
+  async validate(payload: JwtPayload) {
+    const usuario = await this.usersService.findOneForAuthContext(payload.id);
     if (!usuario || usuario.versaoToken !== payload.versaoToken) {
       throw new UnauthorizedException('Sessão inválida ou expirando');
     }

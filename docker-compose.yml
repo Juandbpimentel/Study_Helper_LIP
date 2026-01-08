@@ -41,6 +41,11 @@ services:
       # PDF microservice (opcional): habilite com `--profile pdf` e PDF_ENABLED=true
       PDF_ENABLED: ${PDF_ENABLED:-false}
       PDF_SERVICE_URL: ${PDF_SERVICE_URL:-http://pdf-microservice:3000}
+      # Timeout/retry control for the backend client that calls the PDF microservice
+      PDF_REQUEST_MAX_RETRIES: ${PDF_REQUEST_MAX_RETRIES:-6}
+      PDF_REQUEST_TIMEOUT_MS: ${PDF_REQUEST_TIMEOUT_MS:-10000}
+      PDF_REQUEST_BASE_DELAY_MS: ${PDF_REQUEST_BASE_DELAY_MS:-3000}
+      PDF_REQUEST_MAX_TOTAL_MS: ${PDF_REQUEST_MAX_TOTAL_MS:-60000}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     command: >

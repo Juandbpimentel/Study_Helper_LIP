@@ -40,6 +40,12 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_TOKEN_ENCRYPTION_KEY=
 ```
 
+Para ativar o microserviço PDF, use o profile `pdf` na hora de rodar o compose:
+
+```bash
+docker compose --profile pdf up --build
+```
+
 ### Backend
 
 1. Inicie o banco de dados:

@@ -26,3 +26,5 @@ secretsEEnvsProjeto.env
 
 
 .env
+
+*.txt

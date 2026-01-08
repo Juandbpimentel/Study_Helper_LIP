@@ -24,12 +24,6 @@ export class UserResponseDto {
   versaoToken!: string;
 
   @ApiProperty({
-    description: 'Indica se o usuário possui privilégios administrativos',
-    example: false,
-  })
-  isAdmin!: boolean;
-
-  @ApiProperty({
     description: 'Primeiro dia considerado na construção do cronograma semanal',
     enum: DiaSemana,
     enumName: 'DiaSemana',

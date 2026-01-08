@@ -7,7 +7,6 @@ import { GoogleIntegrationsModule } from '@/integrations/google/google.module';
 import { OfensivaModule } from '@/ofensiva/ofensiva.module';
 import { AuthController } from './controllers/auth.controller';
 import { AuthService } from './services/auth.service';
-import { AdminGuard } from './guards/admin.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { OwnershipGuard } from './guards/ownership.guard';
@@ -34,14 +33,7 @@ import { LocalStrategy } from './strategies/local.strategy';
     LocalAuthGuard,
     JwtAuthGuard,
     OwnershipGuard,
-    AdminGuard,
   ],
-  exports: [
-    LocalAuthGuard,
-    JwtAuthGuard,
-    OwnershipGuard,
-    AdminGuard,
-    AuthService,
-  ],
+  exports: [LocalAuthGuard, JwtAuthGuard, OwnershipGuard, AuthService],
 })
 export class AuthModule {}
