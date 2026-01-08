@@ -13,6 +13,9 @@ COPY prisma ./prisma
 COPY tsconfig*.json nest-cli.json prisma.config.ts ./
 COPY src ./src
 
+RUN npx prisma db push
+RUN npx prisma db seed
+
 EXPOSE 8080
 
 CMD ["npm", "run", "start:dev"]

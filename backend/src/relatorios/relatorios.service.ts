@@ -14,6 +14,7 @@ import {
 import { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
 import { MetricsService } from '@/common/services/metrics.service';
 import { OfensivaService } from '@/ofensiva/ofensiva.service';
+import type { PdfGenerateRequest } from '@/integrations/pdf/pdf.service';
 
 @Injectable()
 export class RelatoriosService {
@@ -126,6 +127,130 @@ export class RelatoriosService {
       revisoesExpiradas: revisaoStats.expiradas,
       revisoesHoje: revisoesDoDia,
       desempenhoPorTema,
+    };
+  }
+
+  async buildResumoPdfRequest(
+    usuarioId: number,
+    query?: ResumoRelatorioQueryDto,
+  ): Promise<PdfGenerateRequest> {
+    const resumo = await this.resumo(usuarioId, query);
+
+    const dataAtual = formatISODate(startOfDay(new Date()));
+    const dataInicial = resumo.periodo.dataInicial;
+    const dataFinal = resumo.periodo.dataFinal;
+
+    const periodoLabel =
+      dataInicial || dataFinal
+        ? `${dataInicial ?? '...'}_a_${dataFinal ?? '...'}`
+        : 'GERAL';
+
+    const temaLabel =
+      typeof query?.temaId === 'number' ? `_tema_${query.temaId}` : '';
+
+    const fileName = `relatorio_resumo_${periodoLabel}${temaLabel}`;
+
+    const fmtNumber = (n: number): string => {
+      if (!Number.isFinite(n)) return '0';
+      if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+      return n.toFixed(2);
+    };
+
+    const registrosLabels = resumo.registrosPorTipo.map((r) => r.tipoRegistro);
+    const registrosData = resumo.registrosPorTipo.map((r) => r.quantidade);
+
+    return {
+      templateName: 'builder',
+      fileName,
+      data: {
+        layout: {
+          margemCima: 10,
+          margemBaixo: 10,
+          margemEsquerda: 12,
+          margemDireita: 12,
+        },
+        secoes: [
+          {
+            componente: 'header_corporativo',
+            margemInferior: 20,
+            empresaNome: 'Study Helper',
+            documentoTitulo: 'RELATÓRIO – RESUMO CONSOLIDADO',
+            referencia: periodoLabel,
+            dataAtual,
+          },
+          {
+            componente: 'info_grid',
+            margemInferior: 20,
+            tituloSecao: 'KPIs',
+            itens: [
+              { label: 'Total estudos', valor: String(resumo.totalEstudos) },
+              {
+                label: 'Tempo total (min)',
+                valor: String(resumo.tempoTotalEstudado),
+              },
+              { label: 'Dias com estudo', valor: String(resumo.diasComEstudo) },
+              {
+                label: 'Média min/dia ativo',
+                valor: fmtNumber(resumo.tempoMedioPorDiaAtivo),
+              },
+              { label: 'Revisões hoje', valor: String(resumo.revisoesHoje) },
+              {
+                label: 'Ofensiva atual (dias)',
+                valor: String(resumo.ofensiva.atual),
+              },
+            ],
+          },
+          {
+            componente: 'info_grid',
+            margemInferior: 20,
+            tituloSecao: 'Revisões',
+            itens: [
+              {
+                label: 'Concluídas',
+                valor: String(resumo.revisoesConcluidas),
+              },
+              { label: 'Pendentes', valor: String(resumo.revisoesPendentes) },
+              { label: 'Atrasadas', valor: String(resumo.revisoesAtrasadas) },
+              { label: 'Expiradas', valor: String(resumo.revisoesExpiradas) },
+            ],
+          },
+          {
+            componente: 'grafico',
+            margemInferior: 20,
+            titulo: 'Registros por tipo',
+            descricao:
+              'Distribuição de registros dentro do período selecionado.',
+            config: {
+              type: 'bar',
+              data: {
+                labels: registrosLabels,
+                datasets: [
+                  {
+                    label: 'Quantidade',
+                    data: registrosData,
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+              },
+            },
+          },
+          {
+            componente: 'tabela',
+            margemInferior: 10,
+            titulo: 'Top temas (por quantidade de estudos)',
+            colunas: ['Tema', 'Qtd estudos', 'Tempo total (min)'],
+            linhas: resumo.desempenhoPorTema.map((t) => [
+              String(t.tema),
+              String(t.quantidadeEstudos),
+              String(t.tempoTotal),
+            ]),
+          },
+        ],
+      },
     };
   }
 }

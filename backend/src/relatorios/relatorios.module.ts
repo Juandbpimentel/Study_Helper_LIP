@@ -4,9 +4,10 @@ import { RelatoriosController } from './relatorios.controller';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { MetricsService } from '@/common/services/metrics.service';
 import { OfensivaModule } from '@/ofensiva/ofensiva.module';
+import { PdfIntegrationsModule } from '@/integrations/pdf/pdf.module';
 
 @Module({
-  imports: [PrismaModule, OfensivaModule],
+  imports: [PrismaModule, OfensivaModule, PdfIntegrationsModule],
   controllers: [RelatoriosController],
   providers: [RelatoriosService, MetricsService],
 })
