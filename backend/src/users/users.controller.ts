@@ -1,23 +1,16 @@
 import {
-  Controller,
-  Get,
-  Query,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Param,
   ParseIntPipe,
-  UseGuards,
+  Patch,
+  Query,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { AdminGuard } from '@/auth/guards/admin.guard';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
-
-import { AuthenticatedRequest } from '@/auth/types';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -29,12 +22,21 @@ import {
   ApiOperation,
   ApiParam,
   ApiQuery,
+  ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { UserResponseDto } from './dto/user-response.dto';
+import { AdminGuard } from '@/auth/guards/admin.guard';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { AuthenticatedRequest } from '@/auth/types';
+import { OfensivaDto } from '@/common/dto/ofensiva.dto';
+import { OfensivaService } from '@/common/services/ofensiva.service';
 import { ListUsersQueryDto } from './dto/list-users.dto';
 import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UserResponseDto } from './dto/user-response.dto';
+import { UsersService } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -42,7 +44,10 @@ import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
 @ApiCookieAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly ofensivaService: OfensivaService,
+  ) {}
 
   @UseGuards(AdminGuard)
   @ApiOperation({
@@ -70,6 +75,18 @@ export class UsersController {
   @Get()
   findAll(@Query() query: ListUsersQueryDto) {
     return this.usersService.findAll(query);
+  }
+
+  @ApiOperation({
+    summary: 'Obter ofensiva do usuário logado',
+    description:
+      'Retorna o resumo de ofensiva/bloqueios do usuário autenticado. Útil para o front atualizar UI sem depender de outros endpoints.',
+  })
+  @ApiResponse({ status: 200, type: OfensivaDto })
+  @Get('me/ofensiva')
+  async meOfensiva(@Req() req: AuthenticatedRequest): Promise<OfensivaDto> {
+    const usuario = await this.usersService.findByIdOrThrow(req.user.id);
+    return this.ofensivaService.fromUsuario(usuario);
   }
 
   @ApiOperation({

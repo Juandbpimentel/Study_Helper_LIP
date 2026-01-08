@@ -16,12 +16,14 @@ import {
   getPagination,
   shouldPaginate,
 } from '@/common/utils/pagination.utils';
+import { OfensivaService } from '@/common/services/ofensiva.service';
 
 @Injectable()
 export class RegistrosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleCalendar: GoogleCalendarService,
+    private readonly ofensivaService: OfensivaService,
   ) {}
 
   async listar(usuarioId: number, query: ListRegistrosQueryDto) {
@@ -92,6 +94,9 @@ export class RegistrosService {
       );
     }
 
+    // Atualiza ofensiva no banco para feedback imediato.
+    void this.ofensivaService.recalcularEAtualizar(usuarioId);
+
     return registro;
   }
 
@@ -153,6 +158,9 @@ export class RegistrosService {
         ),
       );
     }
+
+    // Recalcula ofensiva pois remoção pode desfazer dias ativos.
+    void this.ofensivaService.recalcularEAtualizar(usuarioId);
 
     return removido;
   }

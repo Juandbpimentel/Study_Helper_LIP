@@ -205,7 +205,17 @@ export class RevisoesService {
     return revisaoAtualizada;
   }
 
-  private async atualizarStatusAutomatico(
+  async atualizarStatusAutomaticoTodosUsuarios(): Promise<void> {
+    const usuarios = await this.prisma.usuario.findMany({
+      select: { id: true },
+    });
+
+    for (const u of usuarios) {
+      await this.atualizarStatusAutomatico(u.id);
+    }
+  }
+
+  async atualizarStatusAutomatico(
     usuarioId: number,
     tx?: Prisma.TransactionClient,
   ) {

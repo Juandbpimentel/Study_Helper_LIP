@@ -12,21 +12,22 @@ import {
   startOfDay,
 } from '@/common/utils/date.utils';
 import { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
-import { calcularOfensivaPorDiasAtivos } from '@/common/utils/streak.utils';
 import { MetricsService } from '@/common/services/metrics.service';
+import { OfensivaService } from '@/common/services/ofensiva.service';
 
 @Injectable()
 export class RelatoriosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly metrics: MetricsService,
+    private readonly ofensivaService: OfensivaService,
   ) {}
 
   async resumo(usuarioId: number, query?: ResumoRelatorioQueryDto) {
     const hoje = startOfDay(new Date());
     const amanha = addDays(hoje, 1);
 
-    const ofensiva = await this.calcularOfensiva(usuarioId);
+    const ofensiva = await this.ofensivaService.calcular(usuarioId);
 
     const dataInicial = query?.dataInicial
       ? parseISODate(query.dataInicial)
@@ -92,6 +93,7 @@ export class RelatoriosService {
       ? await this.prisma.revisaoProgramada.count({
           where: {
             creatorId: usuarioId,
+            ...(temaId ? { registroOrigem: { temaId } } : {}),
             dataRevisao: { gte: hoje, lt: amanha },
             statusRevisao: {
               in: [StatusRevisao.Pendente, StatusRevisao.Adiada],
@@ -125,20 +127,5 @@ export class RelatoriosService {
       revisoesHoje: revisoesDoDia,
       desempenhoPorTema,
     };
-  }
-
-  private async calcularOfensiva(usuarioId: number) {
-    const hoje = startOfDay(new Date());
-    const inicio = addDays(hoje, -400);
-    const registros = await this.prisma.registroEstudo.findMany({
-      where: { creatorId: usuarioId, dataEstudo: { gte: inicio } },
-      orderBy: { dataEstudo: 'desc' },
-      select: { dataEstudo: true },
-    });
-
-    return calcularOfensivaPorDiasAtivos(
-      registros.map((r) => r.dataEstudo),
-      2,
-    );
   }
 }

@@ -68,6 +68,14 @@ export class UsersService {
     });
   }
 
+  async findByIdOrThrow(id: number): Promise<Usuario> {
+    const usuario = await this.findOne(id);
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+    return usuario;
+  }
+
   // Sobrecarrega o método findByEmail para definir o retorno como Usuario, Omit<Usuario> ou null, para retornar o usuário com ou sem a senha
   async findByEmail(
     email: string,

@@ -24,6 +24,13 @@ model Usuario {
   slotAtrasoMaxDias        Int  @default(7) @map("slot_atraso_max_dias")
   revisaoAtrasoExpiraDias  Int? @map("revisao_atraso_expira_dias")
 
+  // Ofensiva (streak) e bloqueios (freezes)
+  ofensivaAtual           Int       @default(0) @map("ofensiva_atual")
+  ofensivaBloqueiosTotais Int       @default(2) @map("ofensiva_bloqueios_totais")
+  ofensivaBloqueiosUsados Int       @default(0) @map("ofensiva_bloqueios_usados")
+  ofensivaUltimoDiaAtivo  DateTime? @map("ofensiva_ultimo_dia_ativo")
+  ofensivaAtualizadaEm    DateTime  @default(now()) @map("ofensiva_atualizada_em")
+
   cronogramaSemanal   CronogramaSemanal?
   temasDeEstudo       TemaDeEstudo[]
   revisoesProgramadas RevisaoProgramada[]

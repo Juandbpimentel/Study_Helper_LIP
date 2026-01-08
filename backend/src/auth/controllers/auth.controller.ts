@@ -38,6 +38,7 @@ import {
   LogoutResponseDto,
 } from '../dtos/auth-response.dto';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
+import { OfensivaService } from '@/common/services/ofensiva.service';
 
 type CookieCapableResponse = Response & {
   cookie?: (name: string, val: string, options?: any) => void;
@@ -51,6 +52,7 @@ export class AuthController {
     private authService: AuthService,
     private usersService: UsersService,
     private googleCalendar: GoogleCalendarService,
+    private ofensivaService: OfensivaService,
   ) {}
 
   private getGoogleCalendarBackendStatus() {
@@ -85,12 +87,12 @@ export class AuthController {
   @ApiOperation({
     summary: 'Autenticar usuário',
     description:
-      'Valida as credenciais informadas, emite um token JWT e registra o cookie httpOnly para sessões subsequentes.',
+      'Valida as credenciais informadas, emite um token JWT e registra o cookie httpOnly para sessões subsequentes.\n\nBody (JSON):\n- email (string): email cadastrado\n- senha (string): senha do usuário (mín. 6; regra forte é validada no cadastro)',
   })
   @ApiBody({
     type: LoginRequestDto,
     description:
-      'Informe o email e a senha válidos. O token também será enviado no cookie configurado para o domínio de origem.',
+      'Campos do body (JSON):\n- email: email cadastrado\n- senha: senha do usuário',
   })
   @ApiOkResponse({
     description:
@@ -117,9 +119,12 @@ export class AuthController {
     // Cleanup pós-login: se o usuário revogou acesso no Google, desfaz a integração no banco.
     void this.googleCalendar.verifyAccessAndCleanupIfRevoked(req.user.id);
 
+    const ofensiva = this.ofensivaService.fromUsuario(req.user);
+
     return {
       message: 'Login Realizado com Sucesso',
       ...authResult,
+      ofensiva,
       googleCalendar: this.getGoogleCalendarBackendStatus(),
     };
   }
@@ -166,11 +171,11 @@ export class AuthController {
   @ApiOperation({
     summary: 'Registrar novo usuário',
     description:
-      'Cria uma conta, gera o token JWT inicial e já devolve o cookie de sessão configurado.',
+      'Cria uma conta, gera o token JWT inicial e já devolve o cookie de sessão configurado.\n\nBody (JSON):\n- nome (string)\n- email (string)\n- senha (string): forte (mín. 6, com maiúsculas/minúsculas/números/símbolos)',
   })
   @ApiBody({
     type: CreateUserDto,
-    description: 'Dados necessários para registrar uma nova conta.',
+    description: 'Campos do body (JSON):\n- nome\n- email\n- senha (forte)',
   })
   @ApiCreatedResponse({
     description:
@@ -198,6 +203,9 @@ export class AuthController {
 
     const authResult = await this.authService.register(body);
 
+    // Novo usuário começa com ofensiva zerada.
+    const ofensiva = this.ofensivaService.fromUsuario(authResult.user);
+
     const token = authResult[AUTH_COOKIE_NAME] as string;
     const origin = this.getOriginFromReq(actualReq);
     if (actualRes) {
@@ -217,6 +225,7 @@ export class AuthController {
     return {
       message: 'Usuário registrado com sucesso',
       ...authResult,
+      ofensiva,
       googleCalendar: this.getGoogleCalendarBackendStatus(),
     };
   }
@@ -238,6 +247,7 @@ export class AuthController {
   })
   @Get('profile')
   getProfile(@Req() req: AuthenticatedRequest) {
+    const ofensiva = this.ofensivaService.fromUsuario(req.user);
     const payload = {
       id: req.user.id,
       email: req.user.email,
@@ -251,6 +261,7 @@ export class AuthController {
       revisaoAtrasoExpiraDias: req.user.revisaoAtrasoExpiraDias ?? null,
       createdAt: req.user.createdAt,
       updatedAt: req.user.updatedAt,
+      ofensiva,
     };
     return payload;
   }
@@ -259,14 +270,13 @@ export class AuthController {
   @ApiOperation({
     summary: 'Trocar senha do usuário',
     description:
-      'Valida a senha atual, atualiza a senha e rota o token do usuário, retornando o novo JWT.',
+      'Valida a senha atual, atualiza a senha e rota o token do usuário, retornando o novo JWT.\n\nBody (JSON):\n- senhaAntiga (string)\n- novaSenha (string): forte (mín. 6, com maiúsculas/minúsculas/números/símbolos)',
   })
   @ApiBearerAuth()
   @ApiCookieAuth()
   @ApiBody({
     type: ChangeUserPasswordDto,
-    description:
-      'Informe a senha antiga e a nova senha com os critérios mínimos.',
+    description: 'Campos do body (JSON):\n- senhaAntiga\n- novaSenha',
   })
   @ApiOkResponse({
     description: 'Senha alterada com sucesso e novo token emitido.',
@@ -294,20 +304,24 @@ export class AuthController {
     const token = authResult[AUTH_COOKIE_NAME] as string;
     const origin = this.getOriginFromReq(req);
     this.setCookie(res, token, origin);
-    return { message: 'Senha alterada com sucesso', ...authResult };
+    return {
+      message: 'Senha alterada com sucesso',
+      ...authResult,
+      ofensiva: this.ofensivaService.fromUsuario(updated),
+    };
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Trocar email do usuário',
     description:
-      'Valida a senha atual, garante unicidade do novo email e devolve um novo token JWT atualizado.',
+      'Valida a senha atual, garante unicidade do novo email e devolve um novo token JWT atualizado.\n\nBody (JSON):\n- senha (string)\n- novoEmail (string)',
   })
   @ApiBearerAuth()
   @ApiCookieAuth()
   @ApiBody({
     type: ChangeUserEmailDto,
-    description: 'Informe a senha atual e o novo email desejado.',
+    description: 'Campos do body (JSON):\n- senha\n- novoEmail',
   })
   @ApiOkResponse({
     description: 'Email alterado com sucesso e novo token emitido.',
@@ -334,6 +348,10 @@ export class AuthController {
     const token = authResult[AUTH_COOKIE_NAME] as string;
     const origin = this.getOriginFromReq(req);
     this.setCookie(res, token, origin);
-    return { message: 'Email alterado com sucesso', ...authResult };
+    return {
+      message: 'Email alterado com sucesso',
+      ...authResult,
+      ofensiva: this.ofensivaService.fromUsuario(updated),
+    };
   }
 }

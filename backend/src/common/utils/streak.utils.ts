@@ -64,11 +64,40 @@ export function calcularOfensivaPorDiasAtivos(
   }
 
   return {
-    atual,
-    bloqueiosTotais,
-    bloqueiosUsados,
-    bloqueiosRestantes: Math.max(0, bloqueiosTotais - bloqueiosUsados),
-    ultimoDiaAtivo: formatISODate(diasUnicos[0]),
+    ...ajustarPorDiasSemAtividade({
+      atual,
+      bloqueiosTotais,
+      bloqueiosUsados,
+      ultimoDiaAtivo: diasUnicos[0],
+    }),
+  };
+}
+
+function ajustarPorDiasSemAtividade(args: {
+  atual: number;
+  bloqueiosTotais: number;
+  bloqueiosUsados: number;
+  ultimoDiaAtivo: Date;
+}): OfensivaResumo {
+  const hoje = startOfDay(new Date());
+  const ultimoDiaAtivo = startOfDay(args.ultimoDiaAtivo);
+
+  // Só consome bloqueio quando um dia inteiro passou sem atividade.
+  // Ex.: hoje=08, ultimo=06 => faltasEntre=1 (dia 07 inteiro sem registro).
+  const diff = diffEmDias(hoje, ultimoDiaAtivo);
+  const faltasEntreHojeEUltimo = Math.max(0, diff - 1);
+
+  const bloqueiosUsadosTotal = args.bloqueiosUsados + faltasEntreHojeEUltimo;
+  const estourou = bloqueiosUsadosTotal > args.bloqueiosTotais;
+
+  return {
+    atual: estourou ? 0 : args.atual,
+    bloqueiosTotais: args.bloqueiosTotais,
+    bloqueiosUsados: estourou ? args.bloqueiosTotais : bloqueiosUsadosTotal,
+    bloqueiosRestantes: estourou
+      ? 0
+      : Math.max(0, args.bloqueiosTotais - bloqueiosUsadosTotal),
+    ultimoDiaAtivo: formatISODate(ultimoDiaAtivo),
   };
 }
 

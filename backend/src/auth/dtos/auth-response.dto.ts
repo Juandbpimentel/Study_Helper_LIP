@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { DiaSemana } from '@prisma/client';
 import { UserResponseDto } from '@/users/dto/user-response.dto';
+import { OfensivaDto } from '@/common/dto/ofensiva.dto';
 
 export class GoogleCalendarBackendStatusDto {
   @ApiProperty({
@@ -55,6 +56,13 @@ export class AuthSuccessResponseDto {
     type: () => UserResponseDto,
   })
   user!: UserResponseDto;
+
+  @ApiProperty({
+    description:
+      'Resumo da ofensiva (streak) e bloqueios do usuário para feedback imediato no frontend.',
+    type: () => OfensivaDto,
+  })
+  ofensiva!: OfensivaDto;
 
   @ApiProperty({
     description:
@@ -156,4 +164,11 @@ export class AuthProfileResponseDto {
     format: 'date-time',
   })
   updatedAt!: string;
+
+  @ApiProperty({
+    description:
+      'Resumo da ofensiva (streak) e bloqueios do usuário para feedback imediato no frontend.',
+    type: () => OfensivaDto,
+  })
+  ofensiva!: OfensivaDto;
 }
