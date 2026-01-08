@@ -12,7 +12,7 @@ import {
   startOfDay,
 } from '@/common/utils/date.utils';
 import { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
-import { MetricsService } from '@/common/services/metrics.service';
+import { MetricsService } from './services/metrics.service';
 import { OfensivaService } from '@/ofensiva/ofensiva.service';
 import type { PdfGenerateRequest } from '@/integrations/pdf/pdf.service';
 
