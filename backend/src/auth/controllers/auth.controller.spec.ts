@@ -109,9 +109,14 @@ describe('AuthController', () => {
       clearCookie: clearCookieMock,
     } as unknown as jest.Mocked<Pick<Response, 'cookie' | 'clearCookie'>>;
 
+    const googleCalendarMock = {
+      verifyAccessAndCleanupIfRevoked: jest.fn().mockResolvedValue(true),
+    } as unknown as jest.Mocked<Partial<any>>;
+
     controller = new AuthController(
       authServiceMock as unknown as AuthService,
       usersServiceMock as unknown as UsersService,
+      googleCalendarMock as any,
     );
 
     user = {
