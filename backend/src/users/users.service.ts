@@ -10,6 +10,12 @@ import { UpdateUserDto } from '@/users/dto/update-user.dto';
 import { Usuario } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import { ListUsersQueryDto } from './dto/list-users.dto';
+import {
+  buildMeta,
+  getPagination,
+  shouldPaginate,
+} from '@/common/utils/pagination.utils';
 
 @Injectable()
 export class UsersService {
@@ -26,8 +32,25 @@ export class UsersService {
     });
   }
 
-  async findAll(): Promise<Usuario[]> {
-    return await this.prisma.usuario.findMany();
+  async findAll(query?: ListUsersQueryDto): Promise<Usuario[] | any> {
+    if (!query || !shouldPaginate(query)) {
+      return await this.prisma.usuario.findMany();
+    }
+
+    const { skip, take, page, pageSize } = getPagination(query, {
+      page: 1,
+      pageSize: 50,
+    });
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.usuario.findMany({ skip, take }),
+      this.prisma.usuario.count(),
+    ]);
+
+    return {
+      items,
+      meta: buildMeta({ total, page, pageSize }),
+    };
   }
 
   async findOne(id: number): Promise<Usuario | null> {

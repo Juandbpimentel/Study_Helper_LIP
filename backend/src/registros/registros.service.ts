@@ -11,6 +11,11 @@ import {
 } from './dto/create-registro.dto';
 import { Prisma, StatusRevisao, TipoRegistro } from '@prisma/client';
 import { addDays, parseISODate, startOfDay } from '@/common/utils/date.utils';
+import {
+  buildMeta,
+  getPagination,
+  shouldPaginate,
+} from '@/common/utils/pagination.utils';
 
 @Injectable()
 export class RegistrosService {
@@ -34,18 +39,44 @@ export class RegistrosService {
       filtros.dataEstudo = { gte: inicio, lt: fim };
     }
 
-    return await this.prisma.registroEstudo.findMany({
-      where: filtros,
-      orderBy: { dataEstudo: 'desc' },
-      include: {
-        tema: true,
-        slotCronograma: {
-          include: { tema: true },
-        },
-        revisoesGeradas: true,
-        revisaoConcluida: true,
+    const orderBy = { dataEstudo: 'desc' } as const;
+    const include = {
+      tema: true,
+      slotCronograma: {
+        include: { tema: true },
       },
+      revisoesGeradas: true,
+      revisaoConcluida: true,
+    };
+
+    if (!shouldPaginate(query)) {
+      return await this.prisma.registroEstudo.findMany({
+        where: filtros,
+        orderBy,
+        include,
+      });
+    }
+
+    const { skip, take, page, pageSize } = getPagination(query, {
+      page: 1,
+      pageSize: 50,
     });
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.registroEstudo.findMany({
+        where: filtros,
+        orderBy,
+        include,
+        skip,
+        take,
+      }),
+      this.prisma.registroEstudo.count({ where: filtros }),
+    ]);
+
+    return {
+      items,
+      meta: buildMeta({ total, page, pageSize }),
+    };
   }
 
   async criar(usuarioId: number, dto: CreateRegistroDto) {
@@ -62,6 +93,38 @@ export class RegistrosService {
     }
 
     return registro;
+  }
+
+  async remover(usuarioId: number, registroId: number) {
+    const registro = await this.prisma.registroEstudo.findFirst({
+      where: { id: registroId, creatorId: usuarioId },
+      include: {
+        revisoesGeradas: { select: { googleEventId: true } },
+      },
+    });
+    if (!registro)
+      throw new NotFoundException(
+        'Registro de estudo não encontrado para o usuário',
+      );
+
+    const eventIds = (registro.revisoesGeradas ?? [])
+      .map((r) => r.googleEventId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    // DB first: remove registro (revisões geradas devem cair por cascade em registroOrigem).
+    const removido = await this.prisma.registroEstudo.delete({
+      where: { id: registroId },
+    });
+
+    // Fora da transação: best-effort para limpar eventos de revisões que foram removidas.
+    if (eventIds.length) {
+      await this.googleCalendar.deleteRevisionEventsByEventIds(
+        usuarioId,
+        eventIds,
+      );
+    }
+
+    return removido;
   }
 
   async criarComTx(

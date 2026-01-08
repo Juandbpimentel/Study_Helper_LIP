@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Query,
   Body,
   Patch,
   Param,
@@ -31,6 +32,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { UserResponseDto } from './dto/user-response.dto';
+import { ListUsersQueryDto } from './dto/list-users.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -56,8 +58,8 @@ export class UsersController {
   })
   @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: ListUsersQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @ApiOperation({

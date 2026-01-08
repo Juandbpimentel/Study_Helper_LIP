@@ -2,6 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateThemeDto } from './dto/create-theme.dto';
 import { UpdateThemeDto } from './dto/update-theme.dto';
+import { ListThemesQueryDto } from './dto/list-themes.dto';
+import {
+  buildMeta,
+  getPagination,
+  shouldPaginate,
+} from '@/common/utils/pagination.utils';
 
 @Injectable()
 export class ThemesService {
@@ -29,16 +35,43 @@ export class ThemesService {
     });
   }
 
-  async findAll(usuarioId: number) {
-    return await this.prisma.temaDeEstudo.findMany({
-      where: { creatorId: usuarioId },
-      orderBy: { tema: 'asc' },
-      include: {
-        _count: {
-          select: { slots: true, registros: true },
-        },
+  async findAll(usuarioId: number, query?: ListThemesQueryDto) {
+    const where = { creatorId: usuarioId };
+    const orderBy = { tema: 'asc' } as const;
+    const include = {
+      _count: {
+        select: { slots: true, registros: true },
       },
+    };
+
+    if (!query || !shouldPaginate(query)) {
+      return await this.prisma.temaDeEstudo.findMany({
+        where,
+        orderBy,
+        include,
+      });
+    }
+
+    const { skip, take, page, pageSize } = getPagination(query, {
+      page: 1,
+      pageSize: 50,
     });
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.temaDeEstudo.findMany({
+        where,
+        orderBy,
+        include,
+        skip,
+        take,
+      }),
+      this.prisma.temaDeEstudo.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: buildMeta({ total, page, pageSize }),
+    };
   }
 
   async findOne(usuarioId: number, id: number) {

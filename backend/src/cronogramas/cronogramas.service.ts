@@ -53,43 +53,65 @@ export class CronogramasService {
     const fimSemana = endOfWeek(inicioSemana);
 
     const slotIds = slots.map((slot) => slot.id);
-    const registrosSemanais = slotIds.length
+
+    // Buscamos registros numa janela ampliada para conseguir avaliar a conclusão do slot
+    // mesmo quando a próxima ocorrência cai na semana seguinte.
+    const janelaInicio = addDays(inicioSemana, -7);
+    const janelaFim = addDays(fimSemana, 7);
+    const registros = slotIds.length
       ? await this.prisma.registroEstudo.findMany({
           where: {
             creatorId: usuarioId,
             slotId: { in: slotIds },
             tipoRegistro: TipoRegistro.EstudoDeTema,
-            dataEstudo: { gte: inicioSemana, lt: fimSemana },
+            dataEstudo: { gte: janelaInicio, lt: janelaFim },
           },
           select: { slotId: true, dataEstudo: true },
         })
       : [];
 
-    const registrosPorChave = new Set<string>();
-    registrosSemanais.forEach((registro) => {
-      const chave = `${registro.slotId}:${formatISODate(registro.dataEstudo)}`;
-      registrosPorChave.add(chave);
-    });
+    const registrosPorSlot = new Map<number, Date[]>();
+    for (const registro of registros) {
+      if (registro.slotId == null) continue;
+      const list = registrosPorSlot.get(registro.slotId) ?? [];
+      list.push(registro.dataEstudo);
+      registrosPorSlot.set(registro.slotId, list);
+    }
 
-    const hoje = startOfDay(new Date());
+    // Importante: usamos a referência como "hoje" para permitir consultar semanas passadas/futuras
+    // sem depender do relógio atual do servidor.
+    const hoje = startOfDay(referenciaDate);
 
     const slotsFormatados = slots.map((slot) => {
       const offset = getOffsetFromFirstDay(
         usuario.primeiroDiaSemana,
         slot.diaSemana,
       );
-      const dataAlvo = addDays(inicioSemana, offset);
-      const chave = `${slot.id}:${formatISODate(dataAlvo)}`;
+
+      // Data prevista para este slot dentro da semana consultada.
+      const dataPrevista = addDays(inicioSemana, offset);
+
+      // A dataAlvo exposta é sempre a PRÓXIMA ocorrência (se a prevista já passou, joga +7).
+      let proximaDataAlvo = dataPrevista;
+      if (dataPrevista < hoje) proximaDataAlvo = addDays(dataPrevista, 7);
+
+      // Considera o slot concluído se houver qualquer registro do slot dentro do ciclo semanal
+      // [dataPrevista, proximaDataAlvo). Isso permite concluir atrasado (ex.: quinta para slot de segunda).
+      const registrosDoSlot = registrosPorSlot.get(slot.id) ?? [];
+      const concluidoNoCiclo = registrosDoSlot.some(
+        (d) => d >= dataPrevista && d < proximaDataAlvo,
+      );
+
       let status: SlotStatus = SLOT_STATUS.PENDENTE;
-      if (registrosPorChave.has(chave)) status = SLOT_STATUS.CONCLUIDO;
-      else if (dataAlvo < hoje) status = SLOT_STATUS.ATRASADO;
+      if (concluidoNoCiclo) status = SLOT_STATUS.CONCLUIDO;
+      else if (dataPrevista < hoje) status = SLOT_STATUS.ATRASADO;
 
       return {
         id: slot.id,
         diaSemana: slot.diaSemana,
         ordem: slot.ordem,
         tema: slot.tema,
-        dataAlvo: dataAlvo.toISOString(),
+        dataAlvo: proximaDataAlvo.toISOString(),
         status,
       };
     });

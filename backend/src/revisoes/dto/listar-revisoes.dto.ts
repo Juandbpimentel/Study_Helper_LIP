@@ -1,8 +1,9 @@
 import { IsDateString, IsEnum, IsOptional } from 'class-validator';
 import { StatusRevisao } from '@prisma/client';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
-export class ListarRevisoesQueryDto {
+export class ListarRevisoesQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     description: 'Filtra revisões por status atual',
     enum: StatusRevisao,

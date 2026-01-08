@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -83,6 +84,29 @@ export class RevisoesController {
     @Query() query: ListarRevisoesQueryDto,
   ) {
     return this.revisoesService.listar(req.user.id, query);
+  }
+
+  @ApiOperation({
+    summary: 'Remover revisão programada',
+    description:
+      'Exclui a revisão programada selecionada. Não remove registros já realizados.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador da revisão',
+    example: 10,
+  })
+  @ApiOkResponse({ description: 'Revisão removida com sucesso.' })
+  @ApiNotFoundResponse({
+    description: 'Revisão não encontrada para o usuário.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @Delete(':id')
+  remover(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.revisoesService.remover(req.user.id, id);
   }
 
   @ApiOperation({

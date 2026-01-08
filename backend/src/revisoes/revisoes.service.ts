@@ -13,6 +13,11 @@ import { AdiarRevisaoDto } from './dto/adiar-revisao.dto';
 import { ListarRevisoesQueryDto } from './dto/listar-revisoes.dto';
 import { Prisma, StatusRevisao, TipoRegistro } from '@prisma/client';
 import { addDays, parseISODate, startOfDay } from '@/common/utils/date.utils';
+import {
+  buildMeta,
+  getPagination,
+  shouldPaginate,
+} from '@/common/utils/pagination.utils';
 
 @Injectable()
 export class RevisoesService {
@@ -53,21 +58,69 @@ export class RevisoesService {
       };
     }
 
-    return await this.prisma.revisaoProgramada.findMany({
-      where,
-      orderBy: { dataRevisao: 'asc' },
-      include: {
-        registroOrigem: {
-          include: {
-            tema: true,
-            slotCronograma: {
-              include: { tema: true },
-            },
+    const orderBy = { dataRevisao: 'asc' } as const;
+    const include = {
+      registroOrigem: {
+        include: {
+          tema: true,
+          slotCronograma: {
+            include: { tema: true },
           },
         },
-        registroConclusao: true,
       },
+      registroConclusao: true,
+    };
+
+    if (!shouldPaginate(query)) {
+      return await this.prisma.revisaoProgramada.findMany({
+        where,
+        orderBy,
+        include,
+      });
+    }
+
+    const { skip, take, page, pageSize } = getPagination(query, {
+      page: 1,
+      pageSize: 50,
     });
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.revisaoProgramada.findMany({
+        where,
+        orderBy,
+        include,
+        skip,
+        take,
+      }),
+      this.prisma.revisaoProgramada.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: buildMeta({ total, page, pageSize }),
+    };
+  }
+
+  async remover(usuarioId: number, revisaoId: number) {
+    const revisao = await this.prisma.revisaoProgramada.findFirst({
+      where: { id: revisaoId, creatorId: usuarioId },
+      select: { id: true, googleEventId: true },
+    });
+    if (!revisao)
+      throw new NotFoundException('Revisão programada não encontrada');
+
+    const eventId = revisao.googleEventId;
+    const removida = await this.prisma.revisaoProgramada.delete({
+      where: { id: revisaoId },
+    });
+
+    if (eventId) {
+      await this.googleCalendar.deleteRevisionEventsByEventIds(usuarioId, [
+        eventId,
+      ]);
+    }
+
+    return removida;
   }
 
   async concluir(
