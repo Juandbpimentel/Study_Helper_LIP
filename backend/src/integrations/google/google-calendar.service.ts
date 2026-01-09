@@ -5,7 +5,6 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { decryptSecret, encryptSecret } from '@/common/utils/crypto.utils';
 import {
   addDays,
-  formatISODate,
   getOffsetFromFirstDay,
   startOfDay,
   startOfWeek,
@@ -14,7 +13,25 @@ import { DiaSemana, PrismaClient, StatusRevisao } from '@prisma/client';
 
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
+function looksLikeEncryptedSecret(v: string): boolean {
+  // encryptSecret retorna: v1.<iv>.<tag>.<ciphertext>
+  const parts = v.split('.');
+  return parts.length === 4 && parts[0] === 'v1';
+}
+
+function decryptMaybeEncryptedSecret(v: string): string {
+  if (!looksLikeEncryptedSecret(v)) return v;
+  return decryptSecret(v);
+}
+
 type UnknownRecord = Record<string, unknown>;
+
+export type GoogleCalendarBackendStatus = {
+  enabled: boolean;
+  oauthConfigured: boolean;
+  encryptionKeyConfigured: boolean;
+  issues: string[];
+};
 
 function isObjectRecord(v: unknown): v is UnknownRecord {
   return typeof v === 'object' && v !== null;
@@ -66,11 +83,38 @@ function diaSemanaToByDay(dia: DiaSemana): string {
   }
 }
 
+function formatGoogleAllDayDate(date: Date): string {
+  // Google Calendar API: para eventos all-day, `date` deve ser no formato YYYY-MM-DD.
+  return startOfDay(date).toISOString().slice(0, 10);
+}
+
+type Rgb = { r: number; g: number; b: number };
+
+function parseHexRgb(input: string): Rgb | null {
+  const raw = input.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null;
+
+  const r = Number.parseInt(raw.slice(0, 2), 16);
+  const g = Number.parseInt(raw.slice(2, 4), 16);
+  const b = Number.parseInt(raw.slice(4, 6), 16);
+  if (![r, g, b].every((n) => Number.isFinite(n))) return null;
+  return { r, g, b };
+}
+
+function rgbDistanceSq(a: Rgb, b: Rgb): number {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
 @Injectable()
 export class GoogleCalendarService {
   private readonly logger = new Logger(GoogleCalendarService.name);
   private readonly lastAccessCheckAt = new Map<number, number>();
   private readonly accessCheckTtlMs = 60_000;
+
+  private eventColorsPalettePromise?: Promise<Array<{ id: string; rgb: Rgb }>>;
 
   // Evita "error typed/any" em usos do Prisma caso PrismaService não seja inferido corretamente.
   private readonly prismaDb: PrismaClient;
@@ -82,11 +126,128 @@ export class GoogleCalendarService {
     this.prismaDb = this.prisma as unknown as PrismaClient;
   }
 
-  private isConfigured(): boolean {
+  private getEventColorsPalette(
+    calendar: ReturnType<typeof google.calendar>,
+  ): Promise<Array<{ id: string; rgb: Rgb }>> {
+    if (this.eventColorsPalettePromise) return this.eventColorsPalettePromise;
+
+    this.eventColorsPalettePromise = (async () => {
+      try {
+        const res = await calendar.colors.get({});
+        const eventColors = res.data?.event ?? undefined;
+        if (!eventColors) return [];
+
+        const out: Array<{ id: string; rgb: Rgb }> = [];
+        for (const [id, cfg] of Object.entries(eventColors)) {
+          if (!isObjectRecord(cfg)) continue;
+          const bg = cfg.background;
+          if (typeof bg !== 'string') continue;
+          const rgb = parseHexRgb(bg);
+          if (!rgb) continue;
+          out.push({ id, rgb });
+        }
+
+        return out;
+      } catch (e) {
+        this.logger.warn(
+          `Falha ao buscar paleta de cores do Google: ${String(e)}`,
+        );
+        return [];
+      }
+    })();
+
+    return this.eventColorsPalettePromise;
+  }
+
+  private async resolveGoogleEventColorId(
+    calendar: ReturnType<typeof google.calendar>,
+    temaCorHex: string | null | undefined,
+  ): Promise<string | undefined> {
+    if (!temaCorHex) return undefined;
+    const temaRgb = parseHexRgb(temaCorHex);
+    if (!temaRgb) return undefined;
+
+    const palette = await this.getEventColorsPalette(calendar);
+    if (!palette.length) {
+      // Fallback: ainda tenta aplicar uma cor válida default para não ficar "sem cor".
+      return '1';
+    }
+
+    let bestId = palette[0].id;
+    let bestDist = rgbDistanceSq(temaRgb, palette[0].rgb);
+    for (let i = 1; i < palette.length; i++) {
+      const d = rgbDistanceSq(temaRgb, palette[i].rgb);
+      if (d < bestDist) {
+        bestDist = d;
+        bestId = palette[i].id;
+      }
+    }
+
+    return bestId;
+  }
+
+  private isOauthConfigured(): boolean {
     return (
       Boolean(env('GOOGLE_CLIENT_ID')) &&
       Boolean(env('GOOGLE_CLIENT_SECRET')) &&
       Boolean(env('GOOGLE_REDIRECT_URI'))
+    );
+  }
+
+  private isEncryptionKeyConfigured(): boolean {
+    const raw = env('GOOGLE_TOKEN_ENCRYPTION_KEY');
+    if (!raw) return false;
+
+    // Mesma regra do crypto.utils: aceitar base64 (recomendado) ou hex.
+    const isLikelyBase64 = /[^0-9a-f]/i.test(raw);
+    const buf = Buffer.from(raw, isLikelyBase64 ? 'base64' : 'hex');
+    return buf.length === 32;
+  }
+
+  getBackendStatus(): GoogleCalendarBackendStatus {
+    const issues: string[] = [];
+
+    const hasClientId = Boolean(env('GOOGLE_CLIENT_ID'));
+    const hasClientSecret = Boolean(env('GOOGLE_CLIENT_SECRET'));
+    const hasRedirect = Boolean(env('GOOGLE_REDIRECT_URI'));
+    const oauthConfigured = hasClientId && hasClientSecret && hasRedirect;
+
+    if (!hasClientId) issues.push('GOOGLE_CLIENT_ID ausente');
+    if (!hasClientSecret) issues.push('GOOGLE_CLIENT_SECRET ausente');
+    if (!hasRedirect) issues.push('GOOGLE_REDIRECT_URI ausente');
+
+    const encryptionKeyRaw = env('GOOGLE_TOKEN_ENCRYPTION_KEY');
+    if (!encryptionKeyRaw) {
+      issues.push('GOOGLE_TOKEN_ENCRYPTION_KEY ausente');
+    } else if (!this.isEncryptionKeyConfigured()) {
+      issues.push(
+        'GOOGLE_TOKEN_ENCRYPTION_KEY inválida (esperado 32 bytes em base64 ou hex)',
+      );
+    }
+
+    const encryptionKeyConfigured = this.isEncryptionKeyConfigured();
+    const enabled = oauthConfigured && encryptionKeyConfigured;
+
+    return {
+      enabled,
+      oauthConfigured,
+      encryptionKeyConfigured,
+      issues,
+    };
+  }
+
+  private assertBackendHealthyForGoogleRoutes(): void {
+    const status = this.getBackendStatus();
+    if (status.enabled) return;
+
+    throw new HttpException(
+      {
+        code: 'GOOGLE_CALENDAR_NOT_CONFIGURED',
+        message:
+          'Integração com Google Calendar não está configurada neste backend.',
+        googleCalendar: status,
+      },
+      HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
 
@@ -178,11 +339,7 @@ export class GoogleCalendarService {
   }
 
   buildAuthUrl(userId: number): string {
-    if (!this.isConfigured()) {
-      throw new Error(
-        'OAuth do Google Calendar não está configurado (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).',
-      );
-    }
+    this.assertBackendHealthyForGoogleRoutes();
 
     const state = this.jwt.sign(
       {
@@ -206,11 +363,7 @@ export class GoogleCalendarService {
     code: string,
     stateJwt: string,
   ): Promise<{ redirectUrl: string }> {
-    if (!this.isConfigured()) {
-      throw new Error(
-        'OAuth do Google Calendar não está configurado (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).',
-      );
-    }
+    this.assertBackendHealthyForGoogleRoutes();
 
     const payload = this.jwt.verify<{ userId: number }>(stateJwt);
     const userId = payload?.userId;
@@ -241,18 +394,23 @@ export class GoogleCalendarService {
         ? encryptSecret(refreshToken)
         : (existing?.refreshTokenEncrypted ?? null);
 
+      const accessToken =
+        typeof tokens.access_token === 'string'
+          ? encryptSecret(tokens.access_token)
+          : undefined;
+
       await tx.googleCalendarIntegration.upsert({
         where: { creatorId: userId },
         create: {
           creatorId: userId,
-          accessToken: tokens.access_token ?? null,
+          accessToken: accessToken ?? null,
           refreshTokenEncrypted,
           tokenType: tokens.token_type ?? null,
           scope: tokens.scope ?? null,
           expiryDate,
         },
         update: {
-          accessToken: tokens.access_token ?? existing?.accessToken ?? null,
+          accessToken: accessToken ?? existing?.accessToken ?? null,
           refreshTokenEncrypted,
           tokenType: tokens.token_type ?? existing?.tokenType ?? null,
           scope: tokens.scope ?? existing?.scope ?? null,
@@ -296,6 +454,9 @@ export class GoogleCalendarService {
    * Não lança erro (ideal para rodar pós-login).
    */
   async verifyAccessAndCleanupIfRevoked(userId: number): Promise<boolean> {
+    // Se o backend não está configurado para Google, não deve quebrar login.
+    if (!this.isOauthConfigured()) return false;
+
     try {
       const client = await this.getCalendarClientForOperation(userId, {
         throwOnRevoked: false,
@@ -308,7 +469,7 @@ export class GoogleCalendarService {
   }
 
   private async getOAuthClientOrNull(userId: number) {
-    if (!this.isConfigured()) return null;
+    if (!this.isOauthConfigured()) return null;
 
     const integration =
       await this.prismaDb.googleCalendarIntegration.findUnique({
@@ -341,8 +502,21 @@ export class GoogleCalendarService {
       );
     }
 
+    let accessToken: string | undefined;
+    if (typeof integration.accessToken === 'string') {
+      try {
+        accessToken = decryptMaybeEncryptedSecret(integration.accessToken);
+      } catch (e) {
+        // Se o access token estiver corrompido, dá pra seguir só com refresh token.
+        this.logger.warn(
+          `Falha ao descriptografar access token (user ${userId}). Ignorando access token. ${String(e)}`,
+        );
+        accessToken = undefined;
+      }
+    }
+
     oauth2.setCredentials({
-      access_token: integration.accessToken ?? undefined,
+      access_token: accessToken,
       refresh_token: refreshToken,
       token_type: integration.tokenType ?? undefined,
       scope: integration.scope ?? undefined,
@@ -400,11 +574,21 @@ export class GoogleCalendarService {
       const expiryDate =
         typeof t.expiry_date === 'number' ? new Date(t.expiry_date) : undefined;
 
+      let accessTokenEncrypted: string | undefined;
+      if (typeof t.access_token === 'string') {
+        try {
+          accessTokenEncrypted = encryptSecret(t.access_token);
+        } catch (e) {
+          this.logger.warn(
+            `Falha ao criptografar access token (user ${userId}). ${String(e)}`,
+          );
+        }
+      }
+
       await this.prismaDb.googleCalendarIntegration.update({
         where: { creatorId: userId },
         data: {
-          accessToken:
-            typeof t.access_token === 'string' ? t.access_token : undefined,
+          accessToken: accessTokenEncrypted,
           tokenType:
             typeof t.token_type === 'string' ? t.token_type : undefined,
           scope: typeof t.scope === 'string' ? t.scope : undefined,
@@ -464,6 +648,66 @@ export class GoogleCalendarService {
     ]);
   }
 
+  async forceSyncAllForUser(userId: number): Promise<void> {
+    this.assertBackendHealthyForGoogleRoutes();
+
+    await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: true,
+    });
+
+    await this.syncAllForUser(userId);
+  }
+
+  async resetAndResyncAllForUser(userId: number): Promise<void> {
+    this.assertBackendHealthyForGoogleRoutes();
+
+    // Garante que há integração válida antes de mexer no banco.
+    const client = await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: true,
+    });
+    if (!client) return;
+
+    const [slots, revisoes] = await this.prismaDb.$transaction([
+      this.prismaDb.slotCronograma.findMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        select: { googleEventId: true },
+      }),
+      this.prismaDb.revisaoProgramada.findMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        select: { googleEventId: true },
+      }),
+    ]);
+
+    const slotEventIds = slots
+      .map((s) => s.googleEventId)
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+    const revisaoEventIds = revisoes
+      .map((r) => r.googleEventId)
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+
+    // Best-effort: tenta apagar no Google (se falhar, segue adiante).
+    await Promise.all([
+      this.deleteSlotEventsByEventIds(userId, slotEventIds),
+      this.deleteRevisionEventsByEventIds(userId, revisaoEventIds),
+    ]);
+
+    // Zera os IDs locais para forçar recriação.
+    await this.prismaDb.$transaction([
+      this.prismaDb.slotCronograma.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+      this.prismaDb.revisaoProgramada.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+    ]);
+
+    await this.syncAllForUser(userId);
+  }
+
   async syncSlotsForUser(userId: number): Promise<void> {
     const client = await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
@@ -503,7 +747,7 @@ export class GoogleCalendarService {
     slot: {
       id: number;
       diaSemana: DiaSemana;
-      tema: { tema: string };
+      tema: { tema: string; cor?: string | null };
       googleEventId: string | null;
     },
   ) {
@@ -513,11 +757,16 @@ export class GoogleCalendarService {
     let dataAlvo = addDays(inicioSemana, offset);
     if (dataAlvo < hoje) dataAlvo = addDays(dataAlvo, 7);
 
-    const startDate = formatISODate(dataAlvo);
-    const endDate = formatISODate(addDays(dataAlvo, 1));
+    const startDate = formatGoogleAllDayDate(dataAlvo);
+    const endDate = formatGoogleAllDayDate(addDays(dataAlvo, 1));
 
     const summary = `Cronograma: ${slot.tema.tema}`;
     const byDay = diaSemanaToByDay(slot.diaSemana);
+
+    const colorId = await this.resolveGoogleEventColorId(
+      calendar,
+      slot.tema.cor,
+    );
 
     const requestBody = {
       summary,
@@ -526,6 +775,7 @@ export class GoogleCalendarService {
       start: { date: startDate },
       end: { date: endDate },
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+      ...(colorId ? { colorId } : {}),
     };
 
     try {
@@ -563,8 +813,10 @@ export class GoogleCalendarService {
         throw dbErr;
       }
     } catch (e) {
+      const status = getNested(e, 'response', 'status');
+      const data = getNested(e, 'response', 'data');
       this.logger.warn(
-        `Falha ao upsert slot ${slot.id} no Google Calendar (user ${userId}): ${String(e)}`,
+        `Falha ao upsert slot ${slot.id} no Google Calendar (user ${userId}): ${String(e)}${typeof status === 'number' ? ` (status ${status})` : ''}${data ? ` - ${JSON.stringify(data)}` : ''}`,
       );
     }
   }
@@ -590,6 +842,34 @@ export class GoogleCalendarService {
             });
           } catch (e) {
             // Se já não existe, ok.
+            this.logger.warn(
+              `Falha ao deletar eventId ${eventId} (user ${userId}): ${String(e)}`,
+            );
+          }
+        }),
+    );
+  }
+
+  async deleteRevisionEventsByEventIds(
+    userId: number,
+    eventIds: string[],
+  ): Promise<void> {
+    const client = await this.getCalendarClientForOperation(userId, {
+      throwOnRevoked: true,
+      forceCheck: false,
+    });
+    if (!client) return;
+
+    await Promise.all(
+      eventIds
+        .filter((id) => typeof id === 'string' && id.length > 0)
+        .map(async (eventId) => {
+          try {
+            await client.calendar.events.delete({
+              calendarId: client.calendarId,
+              eventId,
+            });
+          } catch (e) {
             this.logger.warn(
               `Falha ao deletar eventId ${eventId} (user ${userId}): ${String(e)}`,
             );
@@ -641,7 +921,10 @@ export class GoogleCalendarService {
     });
     if (!revisao) return;
 
-    if (revisao.statusRevisao === StatusRevisao.Concluida) {
+    if (
+      revisao.statusRevisao === StatusRevisao.Concluida ||
+      revisao.statusRevisao === StatusRevisao.Expirada
+    ) {
       if (revisao.googleEventId) {
         try {
           await client.calendar.events.delete({
@@ -679,21 +962,27 @@ export class GoogleCalendarService {
       dataRevisao: Date;
       statusRevisao: StatusRevisao;
       googleEventId: string | null;
-      registroOrigem: { tema: { tema: string } | null };
+      registroOrigem: { tema: { tema: string; cor?: string | null } | null };
     },
   ) {
     const data = startOfDay(revisao.dataRevisao);
-    const startDate = formatISODate(data);
-    const endDate = formatISODate(addDays(data, 1));
+    const startDate = formatGoogleAllDayDate(data);
+    const endDate = formatGoogleAllDayDate(addDays(data, 1));
 
     const tema = revisao.registroOrigem.tema?.tema ?? 'Tema';
     const summary = `Revisão: ${tema}`;
+
+    const colorId = await this.resolveGoogleEventColorId(
+      calendar,
+      revisao.registroOrigem.tema?.cor,
+    );
 
     const requestBody = {
       summary,
       description: `Revisão programada (${revisao.statusRevisao}) gerada automaticamente pelo Study Helper.`,
       start: { date: startDate },
       end: { date: endDate },
+      ...(colorId ? { colorId } : {}),
     };
 
     try {
@@ -730,8 +1019,10 @@ export class GoogleCalendarService {
         throw dbErr;
       }
     } catch (e) {
+      const status = getNested(e, 'response', 'status');
+      const data = getNested(e, 'response', 'data');
       this.logger.warn(
-        `Falha ao upsert revisão ${revisao.id} no Google Calendar (user ${userId}): ${String(e)}`,
+        `Falha ao upsert revisão ${revisao.id} no Google Calendar (user ${userId}): ${String(e)}${typeof status === 'number' ? ` (status ${status})` : ''}${data ? ` - ${JSON.stringify(data)}` : ''}`,
       );
     }
   }

@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   Query,
   Req,
@@ -25,6 +28,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
   ApiNotFoundResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import {
   RegistroCriadoResponseDto,
@@ -50,6 +54,14 @@ export class RegistrosController {
     description: 'Filtra registros pelo dia informado (formato ISO).',
     type: String,
     format: 'date-time',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiQuery({
+    name: 'all',
+    required: false,
+    type: Boolean,
+    description: 'Quando true, retorna sem paginação.',
   })
   @ApiOkResponse({
     description: 'Lista de registros retornada com sucesso.',
@@ -96,5 +108,28 @@ export class RegistrosController {
   @Post()
   criar(@Req() req: AuthenticatedRequest, @Body() dto: CreateRegistroDto) {
     return this.registrosService.criar(req.user.id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Remover registro de estudo',
+    description:
+      'Exclui um registro do usuário. Revisões geradas por esse registro são removidas em cascata.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador do registro',
+    example: 1,
+  })
+  @ApiOkResponse({ description: 'Registro removido com sucesso.' })
+  @ApiNotFoundResponse({
+    description: 'Registro não encontrado para o usuário autenticado.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @Delete(':id')
+  remover(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.registrosService.remover(req.user.id, id);
   }
 }

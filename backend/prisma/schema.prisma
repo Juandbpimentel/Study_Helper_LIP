@@ -7,16 +7,28 @@ datasource db {
 }
 
 model Usuario {
-  id          Int     @id @default(autoincrement())
-  email       String  @unique
+  id          Int    @id @default(autoincrement())
+  email       String @unique
   senha       String
   nome        String
-  versaoToken String  @default(uuid()) @map("versao_token")
-  isAdmin     Boolean @default(false) @map("is_admin")
+  versaoToken String @default(uuid()) @map("versao_token")
 
   //preferências do usuário
   primeiroDiaSemana    DiaSemana @default(Dom) @map("primeiro_dia_semana")
   planejamentoRevisoes Int[]     @default([1, 7, 14]) @map("planejamento_revisoes")
+
+  // Configurações do cronograma / atraso
+  maxSlotsPorDia           Int? @map("max_slots_por_dia")
+  slotAtrasoToleranciaDias Int  @default(0) @map("slot_atraso_tolerancia_dias")
+  slotAtrasoMaxDias        Int  @default(7) @map("slot_atraso_max_dias")
+  revisaoAtrasoExpiraDias  Int? @map("revisao_atraso_expira_dias")
+
+  // Ofensiva (streak) e bloqueios (freezes)
+  ofensivaAtual           Int       @default(0) @map("ofensiva_atual")
+  ofensivaBloqueiosTotais Int       @default(3) @map("ofensiva_bloqueios_totais")
+  ofensivaBloqueiosUsados Int       @default(0) @map("ofensiva_bloqueios_usados")
+  ofensivaUltimoDiaAtivo  DateTime? @map("ofensiva_ultimo_dia_ativo")
+  ofensivaAtualizadaEm    DateTime  @default(now()) @map("ofensiva_atualizada_em")
 
   cronogramaSemanal   CronogramaSemanal?
   temasDeEstudo       TemaDeEstudo[]
@@ -174,6 +186,7 @@ enum StatusRevisao {
   Concluida
   Adiada
   Atrasada
+  Expirada
 }
 
 enum DiaSemana {

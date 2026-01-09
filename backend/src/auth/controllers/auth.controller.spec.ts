@@ -6,11 +6,20 @@ import { AUTH_COOKIE_NAME } from '../auth.constants';
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
 import { DiaSemana, Usuario } from '@prisma/client';
+import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authServiceMock: jest.Mocked<AuthService>;
   let usersServiceMock: jest.Mocked<UsersService>;
+  let googleCalendarMock: jest.Mocked<
+    Pick<
+      GoogleCalendarService,
+      'verifyAccessAndCleanupIfRevoked' | 'getBackendStatus'
+    >
+  >;
+  let ofensivaServiceMock: jest.Mocked<Pick<OfensivaService, 'fromUsuario'>>;
   // Use the exact parameter type for controller methods so tests match expected types
   type ChangePasswordReq = Parameters<AuthController['changePassword']>[0];
   type ChangeEmailReq = Parameters<AuthController['changeEmail']>[0];
@@ -24,12 +33,31 @@ describe('AuthController', () => {
       email: 'john@example.com',
       nome: 'John',
       versaoToken: 'v1',
-      primeiroDiaSemana: null,
+      primeiroDiaSemana: DiaSemana.Dom,
       planejamentoRevisoes: [],
+      maxSlotsPorDia: null,
+      slotAtrasoToleranciaDias: 0,
+      slotAtrasoMaxDias: 7,
+      revisaoAtrasoExpiraDias: null,
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       updatedAt: new Date('2024-01-01T00:00:00.000Z'),
     },
   };
+
+  const googleBackendStatus = {
+    enabled: false,
+    oauthConfigured: false,
+    encryptionKeyConfigured: false,
+    issues: ['GOOGLE_CLIENT_ID ausente'],
+  };
+
+  const ofensivaResumo = {
+    atual: 0,
+    bloqueiosTotais: 2,
+    bloqueiosUsados: 0,
+    bloqueiosRestantes: 2,
+    ultimoDiaAtivo: null,
+  } as const;
 
   let loginMock: jest.MockedFunction<
     (this: void, dto: LoginRequestDto) => Promise<typeof authResult>
@@ -49,7 +77,12 @@ describe('AuthController', () => {
     ) => Promise<Usuario>
   >;
   let changeEmailMock: jest.MockedFunction<
-    (this: void, id: number, novoEmail: string) => Promise<Usuario>
+    (
+      this: void,
+      id: number,
+      novoEmail: string,
+      senha: string,
+    ) => Promise<Usuario>
   >;
   let cookieMock: jest.MockedFunction<
     (this: void, name: string, value: string, options?: any) => void
@@ -88,7 +121,12 @@ describe('AuthController', () => {
       ) => Promise<Usuario>
     >;
     changeEmailMock = jest.fn() as jest.MockedFunction<
-      (this: void, id: number, novoEmail: string) => Promise<Usuario>
+      (
+        this: void,
+        id: number,
+        novoEmail: string,
+        senha: string,
+      ) => Promise<Usuario>
     >;
 
     usersServiceMock = {
@@ -109,14 +147,20 @@ describe('AuthController', () => {
       clearCookie: clearCookieMock,
     } as unknown as jest.Mocked<Pick<Response, 'cookie' | 'clearCookie'>>;
 
-    const googleCalendarMock = {
+    googleCalendarMock = {
       verifyAccessAndCleanupIfRevoked: jest.fn().mockResolvedValue(true),
-    } as unknown as jest.Mocked<Partial<any>>;
+      getBackendStatus: jest.fn().mockReturnValue(googleBackendStatus),
+    };
+
+    ofensivaServiceMock = {
+      fromUsuario: jest.fn().mockReturnValue(ofensivaResumo),
+    };
 
     controller = new AuthController(
       authServiceMock as unknown as AuthService,
       usersServiceMock as unknown as UsersService,
-      googleCalendarMock as any,
+      googleCalendarMock,
+      ofensivaServiceMock,
     );
 
     user = {
@@ -127,9 +171,17 @@ describe('AuthController', () => {
       versaoToken: 'v1',
       primeiroDiaSemana: DiaSemana.Dom,
       planejamentoRevisoes: [],
+      maxSlotsPorDia: null,
+      slotAtrasoToleranciaDias: 0,
+      slotAtrasoMaxDias: 7,
+      revisaoAtrasoExpiraDias: null,
+      ofensivaAtual: 0,
+      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosUsados: 0,
+      ofensivaUltimoDiaAtivo: null,
+      ofensivaAtualizadaEm: new Date('2024-01-01T00:00:00.000Z'),
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       updatedAt: new Date('2024-01-01T00:00:00.000Z'),
-      isAdmin: false,
     };
   });
   it('deve autenticar via login e definir cookie', () => {
@@ -151,6 +203,8 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Login Realizado com Sucesso',
       ...authResult,
+      ofensiva: ofensivaResumo,
+      googleCalendar: googleBackendStatus,
     });
   });
 
@@ -175,6 +229,8 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Usuário registrado com sucesso',
       ...authResult,
+      ofensiva: ofensivaResumo,
+      googleCalendar: googleBackendStatus,
     });
   });
 
@@ -204,6 +260,7 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Senha alterada com sucesso',
       ...authResult,
+      ofensiva: ofensivaResumo,
     });
   });
 
@@ -233,6 +290,7 @@ describe('AuthController', () => {
     expect(result).toEqual({
       message: 'Email alterado com sucesso',
       ...authResult,
+      ofensiva: ofensivaResumo,
     });
   });
 

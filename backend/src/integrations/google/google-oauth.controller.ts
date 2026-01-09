@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Post,
   Query,
   Req,
   Res,
@@ -12,6 +13,7 @@ import {
   ApiBearerAuth,
   ApiCookieAuth,
   ApiOperation,
+  ApiOkResponse,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
@@ -89,6 +91,61 @@ export class GoogleOAuthController {
   @Delete('disconnect')
   async disconnect(@Req() req: AuthenticatedRequest) {
     await this.google.disconnect(req.user.id);
+    return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiOperation({
+    summary: 'Forçar sync com Google Calendar',
+    description:
+      'Dispara manualmente o sync backend→Google para slots e revisões pendentes/abertas do usuário autenticado.',
+  })
+  @ApiOkResponse({
+    description: 'Sync disparado com sucesso.',
+    schema: { example: { ok: true } },
+  })
+  @Post('sync')
+  async forceSync(@Req() req: AuthenticatedRequest) {
+    await this.google.forceSyncAllForUser(req.user.id);
+    return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiOperation({
+    summary: 'Resync (hard) com Google Calendar',
+    description:
+      'Tenta apagar eventos existentes (pelos googleEventId salvos), zera os googleEventId no banco e recria tudo. Útil quando IDs ficaram inconsistentes. Pode deixar eventos órfãos se não for possível deletar no Google.',
+  })
+  @ApiQuery({
+    name: 'confirm',
+    required: true,
+    description:
+      'Obrigatório para evitar execução acidental. Use 1/true/yes para confirmar.',
+  })
+  @ApiOkResponse({
+    description: 'Resync hard disparado com sucesso.',
+    schema: { example: { ok: true } },
+  })
+  @Post('resync')
+  async hardResync(
+    @Req() req: AuthenticatedRequest,
+    @Query('confirm') confirm?: string,
+  ) {
+    const confirmed =
+      typeof confirm === 'string' &&
+      ['1', 'true', 'yes'].includes(confirm.toLowerCase());
+
+    if (!confirmed) {
+      throw new BadRequestException(
+        'Confirmação obrigatória: use ?confirm=1 para executar o resync hard.',
+      );
+    }
+
+    await this.google.resetAndResyncAllForUser(req.user.id);
     return { ok: true };
   }
 }

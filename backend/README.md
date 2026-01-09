@@ -31,10 +31,12 @@ src/
 
 ### Pré-requisitos
 
-- Node.js 24+
+- Node.js 22+
 - Docker & Docker Compose
 
 ### Passo a Passo
+
+> Dica: para subir **Postgres + Backend + Frontend** com 1 comando, use o Docker Compose da raiz do repositório (veja o [README principal](../README.md)).
 
 1.  **Configurar Variáveis de Ambiente:**
     Crie um arquivo `.env` na raiz do diretório `backend`:
@@ -42,6 +44,7 @@ src/
     ```env
     DATABASE_URL="postgresql://postgres:postgres@localhost:5432/studyhelper?schema=public"
     PORT=8080
+    FRONTEND_URL=http://localhost:3000
     ```
 
     Se for usar a integração com **Google Calendar**, adicione também:
@@ -56,8 +59,19 @@ src/
 
 2.  **Iniciar o Banco de Dados:**
 
+    Opção A (recomendado para desenvolvimento local com Node rodando na sua máquina): subir só o Postgres.
+
     ```bash
-    docker-compose up -d
+    docker compose up -d postgres
+    ```
+
+    Opção B (compose local do backend): subir Postgres + Backend juntos.
+    - Backend: http://localhost:8081
+    - Swagger: http://localhost:8081/docs
+    - Postgres: localhost:5433
+
+    ```bash
+    docker compose up -d --build
     ```
 
 3.  **Instalar Dependências:**
@@ -67,6 +81,8 @@ src/
     ```
 
 4.  **Rodar Migrations:**
+    - Se estiver usando o compose local (Opção B), as migrations já são aplicadas automaticamente no startup do container com `prisma migrate deploy`.
+    - Se estiver rodando o backend fora do Docker (Node local), use:
 
     ```bash
     npx prisma migrate dev
@@ -77,6 +93,14 @@ src/
     npm run start:dev
     ```
     A API estará disponível em: `http://localhost:8080`
+
+### Prisma Studio (opcional)
+
+Com o banco rodando, você pode abrir o Prisma Studio:
+
+```bash
+npx prisma studio
+```
 
 ## 🧪 Testes e Qualidade
 
@@ -115,5 +139,5 @@ O refresh token é armazenado criptografado (AES-256-GCM). Gere uma chave de 32 
 Exemplo (base64):
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```

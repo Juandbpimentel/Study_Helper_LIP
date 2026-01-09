@@ -1,36 +1,36 @@
 import {
-  Controller,
-  Get,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Param,
   ParseIntPipe,
-  UseGuards,
+  Patch,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { AdminGuard } from '@/auth/guards/admin.guard';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
-
-import { AuthenticatedRequest } from '@/auth/types';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
   ApiCookieAuth,
-  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { AuthenticatedRequest } from '@/auth/types';
+import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
+import { OfensivaService } from '@/ofensiva/ofensiva.service';
+import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UsersService, type PublicUser } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Usuários')
@@ -38,44 +38,46 @@ import { UserResponseDto } from './dto/user-response.dto';
 @ApiCookieAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly ofensivaService: OfensivaService,
+  ) {}
 
-  @UseGuards(AdminGuard)
   @ApiOperation({
-    summary: 'Listar usuários',
+    summary: 'Obter ofensiva do usuário logado',
     description:
-      'Disponível apenas para administradores. Retorna todos os usuários cadastrados.',
+      'Retorna o resumo de ofensiva/bloqueios do usuário autenticado. Útil para o front atualizar UI sem depender de outros endpoints.',
   })
-  @ApiOkResponse({
-    description: 'Lista de usuários retornada com sucesso.',
-    type: UserResponseDto,
-    isArray: true,
-  })
-  @ApiForbiddenResponse({
-    description: 'Usuário autenticado não possui privilégios administrativos.',
-  })
-  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
-  @Get()
-  findAll() {
-    return this.usersService.findAll();
+  @ApiResponse({ status: 200, type: OfensivaDto })
+  @Get('me/ofensiva')
+  meOfensiva(@Req() req: AuthenticatedRequest): OfensivaDto {
+    return this.ofensivaService.fromUsuario(req.user);
   }
 
   @ApiOperation({
     summary: 'Buscar usuário por id',
-    description: 'Retorna dados do usuário solicitado.',
+    description:
+      'Retorna os dados do próprio usuário autenticado (não permite consultar outros usuários).',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiOkResponse({ description: 'Usuário localizado.', type: UserResponseDto })
   @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return await this.usersService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para acessar este usuário',
+      );
+    }
+    return await this.usersService.findByIdOrThrowPublic(id);
   }
 
   @ApiOperation({
     summary: 'Atualizar perfil de usuário',
-    description:
-      'Permite que o próprio usuário (ou um administrador) atualize dados do perfil.',
+    description: 'Permite que o próprio usuário atualize dados do perfil.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiBody({
@@ -98,47 +100,50 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
-  ) {
-    if (req.user.id !== id && !req.user.isAdmin) {
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
       throw new UnauthorizedException(
         'Você não tem permissão para atualizar este usuário',
       );
     }
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.updatePublic(id, updateUserDto);
   }
 
-  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiOperation({
-    summary: 'Definir papel administrativo',
+    summary: 'Atualizar preferências do cronograma/atraso',
     description:
-      'Permite a um administrador conceder ou revogar privilégios administrativos para outro usuário.',
+      'Permite que o próprio usuário ajuste limites e regras de atraso do cronograma e revisões.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiBody({
-    type: UpdateUserRoleDto,
-    description: 'Flag indicando se o usuário será administrador.',
+    type: UpdateUserPreferencesDto,
+    description: 'Preferências a serem atualizadas (parcial).',
   })
   @ApiOkResponse({
-    description: 'Papel atualizado com sucesso.',
+    description: 'Preferências atualizadas com sucesso.',
     type: UserResponseDto,
   })
-  @ApiForbiddenResponse({
-    description: 'Usuário autenticado não possui privilégios administrativos.',
+  @ApiUnauthorizedResponse({
+    description:
+      'Usuário autenticado não possui permissão para alterar este perfil.',
   })
-  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
-  @ApiNotFoundResponse({ description: 'Usuário não encontrado.' })
-  @Patch(':id/role')
-  setRole(
+  @Patch(':id/preferences')
+  updatePreferences(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateUserRoleDto,
-  ) {
-    return this.usersService.updateRole(id, dto.isAdmin);
+    @Body() dto: UpdateUserPreferencesDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<PublicUser> {
+    if (req.user.id !== id) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para atualizar este usuário',
+      );
+    }
+    return this.usersService.updatePreferencesPublic(id, dto);
   }
 
   @ApiOperation({
     summary: 'Remover usuário',
-    description:
-      'Permite que o próprio usuário ou um administrador remova a conta selecionada.',
+    description: 'Permite que o próprio usuário remova a própria conta.',
   })
   @ApiParam({ name: 'id', description: 'Identificador do usuário', example: 1 })
   @ApiOkResponse({
@@ -154,10 +159,10 @@ export class UsersController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: AuthenticatedRequest,
-  ) {
-    if (req.user.id != id && !req.user.isAdmin) {
+  ): Promise<PublicUser> {
+    if (req.user.id != id) {
       throw new UnauthorizedException('Você não pode deletar outro usuário');
     }
-    return this.usersService.remove(id);
+    return this.usersService.removePublic(id);
   }
 }

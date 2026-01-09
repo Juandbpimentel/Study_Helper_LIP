@@ -1,6 +1,41 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { DiaSemana } from '@prisma/client';
 import { UserResponseDto } from '@/users/dto/user-response.dto';
+import { OfensivaDto } from '@/ofensiva/dto/ofensiva.dto';
+
+export class GoogleCalendarBackendStatusDto {
+  @ApiProperty({
+    description:
+      'Se o backend está com Google Calendar habilitado (envs necessários presentes e válidos).',
+    example: false,
+  })
+  enabled!: boolean;
+
+  @ApiProperty({
+    description: 'Se o OAuth (client id/secret/redirect) está configurado.',
+    example: false,
+  })
+  oauthConfigured!: boolean;
+
+  @ApiProperty({
+    description:
+      'Se a chave de criptografia do token está configurada e válida.',
+    example: false,
+  })
+  encryptionKeyConfigured!: boolean;
+
+  @ApiProperty({
+    description:
+      'Lista de problemas detectados na configuração (vazia quando enabled=true).',
+    type: [String],
+    example: [
+      'GOOGLE_CLIENT_ID ausente',
+      'GOOGLE_CLIENT_SECRET ausente',
+      'GOOGLE_TOKEN_ENCRYPTION_KEY ausente',
+    ],
+  })
+  issues!: string[];
+}
 
 export class AuthSuccessResponseDto {
   @ApiProperty({
@@ -21,6 +56,20 @@ export class AuthSuccessResponseDto {
     type: () => UserResponseDto,
   })
   user!: UserResponseDto;
+
+  @ApiProperty({
+    description:
+      'Resumo da ofensiva (streak) e bloqueios do usuário para feedback imediato no frontend.',
+    type: () => OfensivaDto,
+  })
+  ofensiva!: OfensivaDto;
+
+  @ApiProperty({
+    description:
+      'Status do suporte a Google Calendar neste backend (para feedback no frontend).',
+    type: () => GoogleCalendarBackendStatusDto,
+  })
+  googleCalendar!: GoogleCalendarBackendStatusDto;
 }
 
 export class LogoutResponseDto {
@@ -72,6 +121,37 @@ export class AuthProfileResponseDto {
   planejamentoRevisoes!: number[];
 
   @ApiProperty({
+    description: 'Limite máximo de slots por dia da semana (quando definido).',
+    required: false,
+    nullable: true,
+    example: 5,
+  })
+  maxSlotsPorDia!: number | null;
+
+  @ApiProperty({
+    description:
+      'Dias de tolerância após a data prevista antes de marcar um slot como atrasado.',
+    example: 0,
+  })
+  slotAtrasoToleranciaDias!: number;
+
+  @ApiProperty({
+    description:
+      'Quantidade máxima de dias que um slot permanece como atrasado antes de voltar para pendente.',
+    example: 7,
+  })
+  slotAtrasoMaxDias!: number;
+
+  @ApiProperty({
+    description:
+      'Dias após a data da revisão para ela expirar. Quando null, revisões atrasadas não expiram.',
+    required: false,
+    nullable: true,
+    example: 30,
+  })
+  revisaoAtrasoExpiraDias!: number | null;
+
+  @ApiProperty({
     description: 'Data de criação do usuário',
     type: String,
     format: 'date-time',
@@ -84,4 +164,11 @@ export class AuthProfileResponseDto {
     format: 'date-time',
   })
   updatedAt!: string;
+
+  @ApiProperty({
+    description:
+      'Resumo da ofensiva (streak) e bloqueios do usuário para feedback imediato no frontend.',
+    type: () => OfensivaDto,
+  })
+  ofensiva!: OfensivaDto;
 }
