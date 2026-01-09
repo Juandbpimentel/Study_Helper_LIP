@@ -89,40 +89,74 @@ export class CronogramasService {
         slot.diaSemana,
       );
 
+      const criadoEm = startOfDay(slot.createdAt);
+
       // Data prevista para este slot dentro da semana consultada.
-      const dataPrevista = addDays(inicioSemana, offset);
+      // OBS: não pode ser anterior à criação do slot.
+      const dataPrevistaSemana = addDays(inicioSemana, offset);
 
-      // A dataAlvo exposta é sempre a PRÓXIMA ocorrência (se a prevista já passou, joga +7).
-      let proximaDataAlvo = dataPrevista;
-      if (dataPrevista < hoje) proximaDataAlvo = addDays(dataPrevista, 7);
+      // Determina a data-alvo do ciclo (ocorrência "atual"):
+      // - se a ocorrência da semana é anterior à criação, pula para a primeira ocorrência >= criadoEm
+      // - senão, usa a ocorrência da semana (mesmo que seja no passado, para permitir status atrasado)
+      let dataAlvoCiclo = dataPrevistaSemana;
 
-      // Considera o slot concluído se houver qualquer registro do slot dentro do ciclo semanal
-      // [dataPrevista, proximaDataAlvo). Isso permite concluir atrasado (ex.: quinta para slot de segunda).
+      if (dataAlvoCiclo < criadoEm) {
+        const inicioSemanaCriacao = startOfWeek(
+          criadoEm,
+          usuario.primeiroDiaSemana,
+        );
+        dataAlvoCiclo = addDays(inicioSemanaCriacao, offset);
+        if (dataAlvoCiclo < criadoEm) dataAlvoCiclo = addDays(dataAlvoCiclo, 7);
+      }
+
+      // Ciclo semanal associado a essa ocorrência: [dataAlvoCiclo, dataAlvoCiclo+7)
+      // Isso permite concluir "atrasado" (ex.: quinta para slot de segunda).
+      let cicloInicio = dataAlvoCiclo;
+      const cicloFim = addDays(dataAlvoCiclo, 7);
+      if (cicloInicio < criadoEm) cicloInicio = criadoEm;
+
+      // Considera concluído se houver registro dentro do ciclo.
       const registrosDoSlot = registrosPorSlot.get(slot.id) ?? [];
       const concluidoNoCiclo = registrosDoSlot.some(
-        (d) => d >= dataPrevista && d < proximaDataAlvo,
+        (d) => d >= cicloInicio && d < cicloFim,
       );
 
       const toleranciaDias = usuario.slotAtrasoToleranciaDias ?? 0;
       const maxOverdueDays = usuario.slotAtrasoMaxDias ?? 7;
-      const dataVencimento = addDays(dataPrevista, toleranciaDias);
+      const dataVencimento = addDays(dataAlvoCiclo, toleranciaDias);
       const diasAposVencimento = Math.floor(
         (hoje.getTime() - dataVencimento.getTime()) / (24 * 60 * 60 * 1000),
       );
 
       let status: SlotStatus = SLOT_STATUS.PENDENTE;
-      if (concluidoNoCiclo) status = SLOT_STATUS.CONCLUIDO;
-      else if (diasAposVencimento > 0 && diasAposVencimento <= maxOverdueDays)
+      let dataAlvoExibida = dataAlvoCiclo;
+
+      if (concluidoNoCiclo) {
+        status = SLOT_STATUS.CONCLUIDO;
+        // Se já concluiu o ciclo, a próxima ocorrência relevante é a próxima semana.
+        dataAlvoExibida = addDays(dataAlvoCiclo, 7);
+        if (dataAlvoExibida < hoje) {
+          while (dataAlvoExibida < hoje)
+            dataAlvoExibida = addDays(dataAlvoExibida, 7);
+        }
+      } else if (
+        diasAposVencimento > 0 &&
+        diasAposVencimento <= maxOverdueDays
+      ) {
         status = SLOT_STATUS.ATRASADO;
+      } else if (diasAposVencimento > maxOverdueDays) {
+        // Após expirar a janela de atraso, volta a pendente e aponta para a próxima ocorrência.
+        while (dataAlvoExibida < hoje)
+          dataAlvoExibida = addDays(dataAlvoExibida, 7);
+      }
 
       return {
         id: slot.id,
         diaSemana: slot.diaSemana,
         ordem: slot.ordem,
         tema: slot.tema,
-        // `dataAlvo` representa a data prevista DENTRO da semana consultada.
-        // A lógica de conclusão considera o ciclo semanal seguinte para permitir "concluir atrasado".
-        dataAlvo: dataPrevista.toISOString(),
+        createdAt: slot.createdAt.toISOString(),
+        dataAlvo: dataAlvoExibida.toISOString(),
         status,
       };
     });

@@ -59,8 +59,19 @@ src/
 
 2.  **Iniciar o Banco de Dados:**
 
+    Opção A (recomendado para desenvolvimento local com Node rodando na sua máquina): subir só o Postgres.
+
     ```bash
-    docker-compose up -d
+    docker compose up -d postgres
+    ```
+
+    Opção B (compose local do backend): subir Postgres + Backend juntos.
+    - Backend: http://localhost:8081
+    - Swagger: http://localhost:8081/docs
+    - Postgres: localhost:5433
+
+    ```bash
+    docker compose up -d --build
     ```
 
 3.  **Instalar Dependências:**
@@ -70,6 +81,8 @@ src/
     ```
 
 4.  **Rodar Migrations:**
+    - Se estiver usando o compose local (Opção B), as migrations já são aplicadas automaticamente no startup do container com `prisma migrate deploy`.
+    - Se estiver rodando o backend fora do Docker (Node local), use:
 
     ```bash
     npx prisma migrate dev

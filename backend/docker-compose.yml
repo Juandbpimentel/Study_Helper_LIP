@@ -1,59 +1,91 @@
 services:
-    postgres:
-        image: postgres:16-alpine
-        container_name: studyhelper-backend-postgres
-        restart: unless-stopped
-        environment:
-            POSTGRES_DB: ${POSTGRES_DB:-studyhelper}
-            POSTGRES_USER: ${POSTGRES_USER:-postgres}
-            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-        ports:
-            - '${POSTGRES_PORT:-5432}:5432'
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-        healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U postgres']
-            interval: 10s
-            timeout: 5s
-            retries: 5
+  postgres:
+    image: postgres:16-alpine
+    container_name: studyhelper-backend-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-studyhelper}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - '${POSTGRES_PORT:-5433}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-    pgadmin:
-        image: dpage/pgadmin4:latest
-        container_name: studyhelper-backend-pgadmin
-        restart: unless-stopped
-        environment:
-            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@studyhelper.com}
-            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-        ports:
-            - '${PGADMIN_PORT:-5050}:80'
-        depends_on:
-            - postgres
-        volumes:
-            - pgadmin_data:/var/lib/pgadmin
-    
-    # PDF microservice (opcional). Para subir, use: docker compose --profile pdf up
-    pdf-redis:
-        image: redis:7-alpine
-        container_name: studyhelper-backend-pdf-redis
-        restart: unless-stopped
-        profiles: ["pdf"]
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: studyhelper-backend-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DATABASE_URL: ${LOCAL_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
+      DIRECT_URL: ${LOCAL_DIRECT_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/integrations/google/oauth/callback}
+      GOOGLE_CALENDAR_APP_NAME: ${GOOGLE_CALENDAR_APP_NAME:-Study Helper}
+      GOOGLE_TOKEN_ENCRYPTION_KEY: ${GOOGLE_TOKEN_ENCRYPTION_KEY:-dev_encryption_key_change_me}
+      PDF_ENABLED: ${PDF_ENABLED:-false}
+      PDF_SERVICE_URL: ${PDF_SERVICE_URL:-http://pdf-microservice:3000}
+      PDF_REQUEST_MAX_RETRIES: ${PDF_REQUEST_MAX_RETRIES:-6}
+      PDF_REQUEST_TIMEOUT_MS: ${PDF_REQUEST_TIMEOUT_MS:-10000}
+      PDF_REQUEST_BASE_DELAY_MS: ${PDF_REQUEST_BASE_DELAY_MS:-3000}
+      PDF_REQUEST_MAX_TOTAL_MS: ${PDF_REQUEST_MAX_TOTAL_MS:-60000}
+    entrypoint: /usr/local/bin/docker-entrypoint.sh
+    ports:
+      - '8081:8080'
+    command: npm run start:dev
 
-    pdf-microservice:
-        image: ${PDF_IMAGE:-juandbpimentel/pdf-microservice:latest}
-        container_name: studyhelper-backend-pdf-microservice
-        restart: unless-stopped
-        profiles: ["pdf"]
-        depends_on:
-            - pdf-redis
-        environment:
-            PORT: ${PDF_PORT:-3000}
-            REDIS_URL: ${REDIS_URL:-redis://pdf-redis:6379}
-            ALLOWED_ORIGINS: ${PDF_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080, http://backend:8080, http://studyhelper-backend:8080}
-            MAX_RETRIES: ${PDF_MAX_RETRIES:-3}
-            PDF_SERVICE_PUBLIC_API_URL: ${PDF_SERVICE_PUBLIC_API_URL:-http://localhost:${PDF_PORT:-3005}}
-        ports:
-            - "${PDF_PORT:-3005}:3000"
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: studyhelper-backend-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@studyhelper.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - '${PGADMIN_PORT:-5050}:80'
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  # PDF microservice (opcional). Para subir, use: docker compose --profile pdf up
+  pdf-redis:
+    image: redis:7-alpine
+    container_name: studyhelper-backend-pdf-redis
+    restart: unless-stopped
+    profiles: ['pdf']
+
+  pdf-microservice:
+    image: ${PDF_IMAGE:-juandbpimentel/pdf-microservice:latest}
+    container_name: studyhelper-backend-pdf-microservice
+    restart: unless-stopped
+    profiles: ['pdf']
+    depends_on:
+      - pdf-redis
+    environment:
+      PORT: ${PDF_PORT:-3000}
+      REDIS_URL: ${REDIS_URL:-redis://pdf-redis:6379}
+      ALLOWED_ORIGINS: ${PDF_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080, http://backend:8080, http://studyhelper-backend:8080}
+      MAX_RETRIES: ${PDF_MAX_RETRIES:-3}
+      PDF_SERVICE_PUBLIC_API_URL: ${PDF_SERVICE_PUBLIC_API_URL:-http://localhost:${PDF_PORT:-3005}}
+    ports:
+      - '${PDF_PORT:-3005}:3000'
 
 volumes:
-    postgres_data:
-    pgadmin_data:
+  postgres_data:
+  pgadmin_data:

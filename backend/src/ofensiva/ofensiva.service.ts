@@ -1,15 +1,127 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import {
-  calcularOfensivaPorDiasAtivos,
-  OfensivaResumo,
-} from '@/common/utils/streak.utils';
+import { OfensivaResumo } from '@/common/utils/streak.utils';
 import { addDays, startOfDay } from '@/common/utils/date.utils';
-import type { Usuario } from '@prisma/client';
+import { TipoRegistro, type Usuario } from '@prisma/client';
+
+const OFENSIVA_BLOQUEIOS_MAX = 3;
+
+function dayKey(date: Date): string {
+  return startOfDay(date).toISOString().slice(0, 10);
+}
+
+function diffDaysUtc(a: Date, b: Date): number {
+  const aa = startOfDay(a).getTime();
+  const bb = startOfDay(b).getTime();
+  return Math.floor((aa - bb) / (24 * 60 * 60 * 1000));
+}
 
 @Injectable()
 export class OfensivaService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private calcularOfensivaComRecuperacao(args: {
+    registrosAsc: Array<{ dataEstudo: Date; tipoRegistro: TipoRegistro }>;
+    bloqueiosTotais: number;
+  }): OfensivaResumo {
+    const bloqueiosTotais = Math.max(
+      0,
+      Math.min(OFENSIVA_BLOQUEIOS_MAX, args.bloqueiosTotais),
+    );
+
+    if (!args.registrosAsc.length) {
+      return {
+        atual: 0,
+        bloqueiosTotais,
+        bloqueiosUsados: 0,
+        bloqueiosRestantes: bloqueiosTotais,
+        ultimoDiaAtivo: null,
+      };
+    }
+
+    type DayAgg = { day: Date; reviewCount: number };
+    const days: DayAgg[] = [];
+
+    for (const r of args.registrosAsc) {
+      const d = startOfDay(r.dataEstudo);
+      const key = dayKey(d);
+
+      const last = days.length ? days[days.length - 1] : undefined;
+      if (!last || dayKey(last.day) !== key) {
+        days.push({
+          day: d,
+          reviewCount: r.tipoRegistro === TipoRegistro.Revisao ? 1 : 0,
+        });
+      } else if (r.tipoRegistro === TipoRegistro.Revisao) {
+        last.reviewCount += 1;
+      }
+    }
+
+    let ofensivaAtual = 0;
+    let bloqueiosUsados = 0;
+    let lastActiveDay: Date | null = null;
+
+    for (const { day, reviewCount } of days) {
+      if (!lastActiveDay) {
+        ofensivaAtual = 1;
+        bloqueiosUsados = 0;
+        lastActiveDay = day;
+      } else {
+        const diff = diffDaysUtc(day, lastActiveDay);
+        if (diff > 0) {
+          if (diff === 1) {
+            ofensivaAtual += 1;
+          } else {
+            const faltas = diff - 1;
+            const restantes = Math.max(0, bloqueiosTotais - bloqueiosUsados);
+            if (faltas > restantes) {
+              // Estourou: reinicia ofensiva no dia atual.
+              ofensivaAtual = 1;
+              bloqueiosUsados = 0;
+            } else {
+              bloqueiosUsados += faltas;
+              ofensivaAtual += 1;
+            }
+          }
+
+          lastActiveDay = day;
+        }
+      }
+
+      // Recupera bloqueios ao concluir revisões (cada registro de revisão recupera 1, até o max).
+      if (reviewCount > 0) {
+        bloqueiosUsados = Math.max(0, bloqueiosUsados - reviewCount);
+      }
+    }
+
+    const hoje = startOfDay(new Date());
+    const ultimoDiaAtivo = lastActiveDay ? startOfDay(lastActiveDay) : null;
+
+    if (!ultimoDiaAtivo) {
+      return {
+        atual: 0,
+        bloqueiosTotais,
+        bloqueiosUsados: 0,
+        bloqueiosRestantes: bloqueiosTotais,
+        ultimoDiaAtivo: null,
+      };
+    }
+
+    const diffHoje = diffDaysUtc(hoje, ultimoDiaAtivo);
+    const faltasEntreHojeEUltimo = Math.max(0, diffHoje - 1);
+    const usadosTotal = bloqueiosUsados + faltasEntreHojeEUltimo;
+    const estourou = usadosTotal > bloqueiosTotais;
+
+    return {
+      atual: estourou ? 0 : Math.max(0, ofensivaAtual),
+      bloqueiosTotais,
+      bloqueiosUsados: estourou ? bloqueiosTotais : usadosTotal,
+      bloqueiosRestantes: estourou
+        ? 0
+        : Math.max(0, bloqueiosTotais - usadosTotal),
+      ultimoDiaAtivo: dayKey(ultimoDiaAtivo),
+    };
+  }
 
   fromUsuario(
     usuario: Pick<
@@ -23,14 +135,19 @@ export class OfensivaService {
     const bloqueiosTotais =
       typeof usuario.ofensivaBloqueiosTotais === 'number'
         ? usuario.ofensivaBloqueiosTotais
-        : 2;
+        : OFENSIVA_BLOQUEIOS_MAX;
+
+    const bloqueiosTotaisClamped = Math.max(
+      0,
+      Math.min(OFENSIVA_BLOQUEIOS_MAX, bloqueiosTotais),
+    );
 
     if (!usuario.ofensivaUltimoDiaAtivo) {
       return {
         atual: 0,
-        bloqueiosTotais,
+        bloqueiosTotais: bloqueiosTotaisClamped,
         bloqueiosUsados: 0,
-        bloqueiosRestantes: bloqueiosTotais,
+        bloqueiosRestantes: bloqueiosTotaisClamped,
         ultimoDiaAtivo: null,
       };
     }
@@ -46,41 +163,43 @@ export class OfensivaService {
         ? usuario.ofensivaBloqueiosUsados
         : 0;
     const usados = bloqueiosUsadosBase + faltasEntre;
-    const estourou = usados > bloqueiosTotais;
+    const estourou = usados > bloqueiosTotaisClamped;
 
     return {
       atual:
         estourou || typeof usuario.ofensivaAtual !== 'number'
           ? 0
           : usuario.ofensivaAtual,
-      bloqueiosTotais,
-      bloqueiosUsados: estourou ? bloqueiosTotais : usados,
-      bloqueiosRestantes: estourou ? 0 : Math.max(0, bloqueiosTotais - usados),
+      bloqueiosTotais: bloqueiosTotaisClamped,
+      bloqueiosUsados: estourou ? bloqueiosTotaisClamped : Math.max(0, usados),
+      bloqueiosRestantes: estourou
+        ? 0
+        : Math.max(0, bloqueiosTotaisClamped - Math.max(0, usados)),
       ultimoDiaAtivo: ultimo.toISOString().slice(0, 10),
     };
   }
 
   async calcular(
     usuarioId: number,
-    bloqueiosTotais = 2,
+    bloqueiosTotais = OFENSIVA_BLOQUEIOS_MAX,
   ): Promise<OfensivaResumo> {
     const hoje = startOfDay(new Date());
     const inicio = addDays(hoje, -400);
 
     const registros = await this.prisma.registroEstudo.findMany({
       where: { creatorId: usuarioId, dataEstudo: { gte: inicio } },
-      orderBy: { dataEstudo: 'desc' },
-      select: { dataEstudo: true },
+      orderBy: { dataEstudo: 'asc' },
+      select: { dataEstudo: true, tipoRegistro: true },
     });
 
-    return calcularOfensivaPorDiasAtivos(
-      registros.map((r) => r.dataEstudo),
+    return this.calcularOfensivaComRecuperacao({
+      registrosAsc: registros,
       bloqueiosTotais,
-    );
+    });
   }
 
   async recalcularEAtualizar(usuarioId: number): Promise<OfensivaResumo> {
-    const resumo = await this.calcular(usuarioId, 2);
+    const resumo = await this.calcular(usuarioId, OFENSIVA_BLOQUEIOS_MAX);
 
     await this.prisma.usuario.update({
       where: { id: usuarioId },

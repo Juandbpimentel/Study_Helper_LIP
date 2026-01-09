@@ -1,6 +1,6 @@
 import { OfensivaService } from './ofensiva.service';
 import type { PrismaService } from '@/prisma/prisma.service';
-import type { Prisma } from '@prisma/client';
+import { TipoRegistro, type Prisma } from '@prisma/client';
 
 function iso(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -18,16 +18,16 @@ describe('OfensivaService', () => {
 
     const result = service.fromUsuario({
       ofensivaAtual: 10,
-      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosTotais: 3,
       ofensivaBloqueiosUsados: 1,
       ofensivaUltimoDiaAtivo: null,
     });
 
     expect(result).toEqual({
       atual: 0,
-      bloqueiosTotais: 2,
+      bloqueiosTotais: 3,
       bloqueiosUsados: 0,
-      bloqueiosRestantes: 2,
+      bloqueiosRestantes: 3,
       ultimoDiaAtivo: null,
     });
   });
@@ -41,14 +41,14 @@ describe('OfensivaService', () => {
 
     const result = service.fromUsuario({
       ofensivaAtual: 7,
-      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosTotais: 3,
       ofensivaBloqueiosUsados: 0,
       ofensivaUltimoDiaAtivo: new Date('2026-01-07T10:00:00.000Z'),
     });
 
     expect(result.atual).toBe(7);
     expect(result.bloqueiosUsados).toBe(0);
-    expect(result.bloqueiosRestantes).toBe(2);
+    expect(result.bloqueiosRestantes).toBe(3);
     expect(result.ultimoDiaAtivo).toBe('2026-01-07');
   });
 
@@ -61,14 +61,14 @@ describe('OfensivaService', () => {
 
     const result = service.fromUsuario({
       ofensivaAtual: 7,
-      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosTotais: 3,
       ofensivaBloqueiosUsados: 0,
       ofensivaUltimoDiaAtivo: new Date('2026-01-06T10:00:00.000Z'),
     });
 
     expect(result.atual).toBe(7);
     expect(result.bloqueiosUsados).toBe(1);
-    expect(result.bloqueiosRestantes).toBe(1);
+    expect(result.bloqueiosRestantes).toBe(2);
     expect(result.ultimoDiaAtivo).toBe('2026-01-06');
   });
 
@@ -76,15 +76,21 @@ describe('OfensivaService', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-01-08T12:00:00.000Z'));
 
-    type RegistroEstudoRow = { dataEstudo: Date };
+    type RegistroEstudoRow = { dataEstudo: Date; tipoRegistro: TipoRegistro };
     const registroEstudoFindMany = jest.fn<
       Promise<RegistroEstudoRow[]>,
       [Prisma.RegistroEstudoFindManyArgs]
     >();
 
     registroEstudoFindMany.mockResolvedValue([
-      { dataEstudo: new Date('2026-01-08T01:00:00.000Z') },
-      { dataEstudo: new Date('2026-01-07T01:00:00.000Z') },
+      {
+        dataEstudo: new Date('2026-01-07T01:00:00.000Z'),
+        tipoRegistro: TipoRegistro.EstudoDeTema,
+      },
+      {
+        dataEstudo: new Date('2026-01-08T01:00:00.000Z'),
+        tipoRegistro: TipoRegistro.Revisao,
+      },
     ]);
 
     const prisma = {
@@ -95,7 +101,7 @@ describe('OfensivaService', () => {
 
     const service = new OfensivaService(prisma);
 
-    const result = await service.calcular(123, 2);
+    const result = await service.calcular(123, 3);
 
     expect(registroEstudoFindMany).toHaveBeenCalledTimes(1);
     const findManyArgs = registroEstudoFindMany.mock.calls[0]?.[0];
@@ -103,12 +109,15 @@ describe('OfensivaService', () => {
       throw new Error('registroEstudo.findMany não foi chamado');
     }
     expect(findManyArgs.where).toMatchObject({ creatorId: 123 });
-    expect(findManyArgs.orderBy).toEqual({ dataEstudo: 'desc' });
-    expect(findManyArgs.select).toEqual({ dataEstudo: true });
+    expect(findManyArgs.orderBy).toEqual({ dataEstudo: 'asc' });
+    expect(findManyArgs.select).toEqual({
+      dataEstudo: true,
+      tipoRegistro: true,
+    });
 
     expect(result.atual).toBe(2);
-    expect(result.bloqueiosTotais).toBe(2);
-    expect(result.ultimoDiaAtivo).toBe('2026-01-08T00:00:00.000Z');
+    expect(result.bloqueiosTotais).toBe(3);
+    expect(result.ultimoDiaAtivo).toBe('2026-01-08');
   });
 
   it('recalcularEAtualizar: persiste resultado no usuário', async () => {
@@ -128,15 +137,15 @@ describe('OfensivaService', () => {
 
     const calcularSpy = jest.spyOn(service, 'calcular').mockResolvedValue({
       atual: 3,
-      bloqueiosTotais: 2,
+      bloqueiosTotais: 3,
       bloqueiosUsados: 1,
-      bloqueiosRestantes: 1,
+      bloqueiosRestantes: 2,
       ultimoDiaAtivo: '2026-01-08',
     });
 
     const result = await service.recalcularEAtualizar(55);
 
-    expect(calcularSpy).toHaveBeenCalledWith(55, 2);
+    expect(calcularSpy).toHaveBeenCalledWith(55, 3);
 
     expect(usuarioUpdate).toHaveBeenCalledTimes(1);
     const updateArgs = usuarioUpdate.mock.calls[0]?.[0];
@@ -146,7 +155,7 @@ describe('OfensivaService', () => {
     expect(updateArgs.where).toEqual({ id: 55 });
     expect(updateArgs.data).toMatchObject({
       ofensivaAtual: 3,
-      ofensivaBloqueiosTotais: 2,
+      ofensivaBloqueiosTotais: 3,
       ofensivaBloqueiosUsados: 1,
       ofensivaUltimoDiaAtivo: new Date('2026-01-08T00:00:00.000Z'),
     });
@@ -173,21 +182,21 @@ describe('OfensivaService', () => {
         {
           id: 1,
           ofensivaAtual: 5,
-          ofensivaBloqueiosTotais: 2,
+          ofensivaBloqueiosTotais: 3,
           ofensivaBloqueiosUsados: 0,
           ofensivaUltimoDiaAtivo: new Date('2026-01-06T00:00:00.000Z'),
         },
         {
           id: 2,
           ofensivaAtual: 5,
-          ofensivaBloqueiosTotais: 2,
+          ofensivaBloqueiosTotais: 3,
           ofensivaBloqueiosUsados: 1,
           ofensivaUltimoDiaAtivo: new Date('2026-01-06T00:00:00.000Z'),
         },
         {
           id: 3,
           ofensivaAtual: 0,
-          ofensivaBloqueiosTotais: 2,
+          ofensivaBloqueiosTotais: 3,
           ofensivaBloqueiosUsados: 0,
           ofensivaUltimoDiaAtivo: null,
         },

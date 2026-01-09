@@ -32,6 +32,14 @@ export class CronogramaSlotResponseDto {
   id!: number;
 
   @ApiProperty({
+    description:
+      'Data de criação do slot (quando passou a existir no cronograma)',
+    type: String,
+    format: 'date-time',
+  })
+  createdAt!: string;
+
+  @ApiProperty({
     description: 'Dia da semana planejado',
     enum: DiaSemana,
     enumName: 'DiaSemana',

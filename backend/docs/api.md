@@ -712,7 +712,7 @@ Valores possíveis:
   - `dataFinal` (string `YYYY-MM-DD` | null)
 - `ofensiva`:
   - `atual` (number)
-  - `bloqueiosTotais` (number) — sempre 2
+    - `bloqueiosTotais` (number) — capacidade máxima 3
   - `bloqueiosUsados` (number)
   - `bloqueiosRestantes` (number)
   - `ultimoDiaAtivo` (string `YYYY-MM-DD` | null)

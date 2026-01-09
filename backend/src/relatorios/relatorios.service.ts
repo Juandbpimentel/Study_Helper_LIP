@@ -16,6 +16,26 @@ import { MetricsService } from './services/metrics.service';
 import { OfensivaService } from '@/ofensiva/ofensiva.service';
 import type { PdfGenerateRequest } from '@/integrations/pdf/pdf.service';
 
+function formatUtcPtBrDateTime(date: Date): string {
+  const dd = String(date.getUTCDate());
+  const mm = String(date.getUTCMonth() + 1);
+  const yyyy = String(date.getUTCFullYear());
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const min = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
+function formatUtcFileDate(date: Date): string {
+  // YYYY-MM-DD (seguro para nome de arquivo)
+  return startOfDay(date).toISOString().slice(0, 10);
+}
+
+function withUtcTime(base: Date, hour: number, minute: number): Date {
+  const d = new Date(base);
+  d.setUTCHours(hour, minute, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class RelatoriosService {
   constructor(
@@ -136,19 +156,44 @@ export class RelatoriosService {
   ): Promise<PdfGenerateRequest> {
     const resumo = await this.resumo(usuarioId, query);
 
-    const dataAtual = formatISODate(startOfDay(new Date()));
-    const dataInicial = resumo.periodo.dataInicial;
-    const dataFinal = resumo.periodo.dataFinal;
+    const now = new Date();
+    const dataAtual = formatUtcPtBrDateTime(now);
 
-    const periodoLabel =
-      dataInicial || dataFinal
-        ? `${dataInicial ?? '...'}_a_${dataFinal ?? '...'}`
+    const dataInicialRaw = query?.dataInicial
+      ? parseISODate(query.dataInicial)
+      : null;
+    const dataFinalRaw = query?.dataFinal
+      ? parseISODate(query.dataFinal)
+      : null;
+
+    // Para referência humana: mostrar em pt-BR com HH:mm, mas com horários fixos no período:
+    // início 00:00 e fim 23:59 (sem usar o horário atual do momento do relatório).
+    const dataInicialRef = dataInicialRaw
+      ? withUtcTime(startOfDay(dataInicialRaw), 0, 0)
+      : null;
+    const dataFinalRef = dataFinalRaw
+      ? withUtcTime(startOfDay(dataFinalRaw), 23, 59)
+      : null;
+
+    const periodoRefLabel =
+      dataInicialRef || dataFinalRef
+        ? `${dataInicialRef ? formatUtcPtBrDateTime(dataInicialRef) : '...'} a ${
+            dataFinalRef ? formatUtcPtBrDateTime(dataFinalRef) : '...'
+          }`
+        : 'GERAL';
+
+    // Para nome de arquivo: manter apenas YYYY-MM-DD (sem ':' e sem timezone).
+    const periodoFileLabel =
+      dataInicialRaw || dataFinalRaw
+        ? `${dataInicialRaw ? formatUtcFileDate(dataInicialRaw) : '...'}_a_${
+            dataFinalRaw ? formatUtcFileDate(dataFinalRaw) : '...'
+          }`
         : 'GERAL';
 
     const temaLabel =
       typeof query?.temaId === 'number' ? `_tema_${query.temaId}` : '';
 
-    const fileName = `relatorio_resumo_${periodoLabel}${temaLabel}`;
+    const fileName = `relatorio_resumo_${periodoFileLabel}${temaLabel}`;
 
     const fmtNumber = (n: number): string => {
       if (!Number.isFinite(n)) return '0';
@@ -175,7 +220,7 @@ export class RelatoriosService {
             margemInferior: 20,
             empresaNome: 'Study Helper',
             documentoTitulo: 'RELATÓRIO – RESUMO CONSOLIDADO',
-            referencia: periodoLabel,
+            referencia: periodoRefLabel,
             dataAtual,
           },
           {

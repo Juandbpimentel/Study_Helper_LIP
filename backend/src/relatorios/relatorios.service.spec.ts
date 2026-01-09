@@ -13,6 +13,54 @@ describe('RelatoriosService', () => {
     jest.restoreAllMocks();
   });
 
+  it('buildResumoPdfRequest: referencia usa 00:00 a 23:59 no período', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-11-13T16:30:00.000Z'));
+
+    const prisma = {} as unknown as PrismaService;
+    const metrics = {} as unknown as MetricsService;
+    const ofensiva = {} as unknown as OfensivaService;
+
+    const service = new RelatoriosService(prisma, metrics, ofensiva);
+
+    jest.spyOn(service, 'resumo').mockResolvedValue({
+      periodo: { dataInicial: null, dataFinal: null },
+      ofensiva: {
+        atual: 0,
+        bloqueiosTotais: 0,
+        bloqueiosUsados: 0,
+        bloqueiosRestantes: 0,
+        ultimoDiaAtivo: null,
+      },
+      totalEstudos: 0,
+      tempoTotalEstudado: 0,
+      diasComEstudo: 0,
+      tempoMedioPorDiaAtivo: 0,
+      registrosPorTipo: [],
+      revisoesConcluidas: 0,
+      revisoesPendentes: 0,
+      revisoesAtrasadas: 0,
+      revisoesExpiradas: 0,
+      revisoesHoje: 0,
+      desempenhoPorTema: [],
+    } as any);
+
+    const req = await service.buildResumoPdfRequest(1, {
+      dataInicial: '2026-11-01',
+      dataFinal: '2026-11-30',
+    });
+
+    const secoes = (req as any).data?.secoes as any[] | undefined;
+    if (!secoes) throw new Error('Seções do PDF não encontradas');
+
+    const header = secoes.find(
+      (s: any) => s.componente === 'header_corporativo',
+    );
+    if (!header) throw new Error('Seção header_corporativo não encontrada');
+
+    expect(header.referencia).toBe('1/11/2026 00:00 a 30/11/2026 23:59');
+  });
+
   it('resumo: lança BadRequest quando dataInicial é inválida', async () => {
     const prisma = {} as unknown as PrismaService;
 
@@ -182,7 +230,7 @@ describe('RelatoriosService', () => {
       .fn<
         Promise<
           Array<{
-            temaId: number | null;
+            temaId: number;
             tema: string;
             cor: string | null;
             quantidadeEstudos: number;

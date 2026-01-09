@@ -22,6 +22,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: studyhelper-backend
+    entrypoint: /usr/local/bin/docker-entrypoint.sh
     restart: unless-stopped
     depends_on:
       postgres:
@@ -30,8 +31,8 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: ${PORT:-8080}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
-      DIRECT_URL: ${DIRECT_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
+      DIRECT_URL: ${DOCKER_DIRECT_URL:-postgresql://postgres:postgres@postgres:5432/studyhelper?schema=public}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -48,8 +49,7 @@ services:
       PDF_REQUEST_MAX_TOTAL_MS: ${PDF_REQUEST_MAX_TOTAL_MS:-60000}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
-    command: >
-      sh -c "npx prisma generate && npx prisma migrate deploy && npm run start:dev"
+    command: npm run start:dev
 
   frontend:
     build:

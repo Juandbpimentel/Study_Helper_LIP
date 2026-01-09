@@ -88,11 +88,33 @@ function formatGoogleAllDayDate(date: Date): string {
   return startOfDay(date).toISOString().slice(0, 10);
 }
 
+type Rgb = { r: number; g: number; b: number };
+
+function parseHexRgb(input: string): Rgb | null {
+  const raw = input.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null;
+
+  const r = Number.parseInt(raw.slice(0, 2), 16);
+  const g = Number.parseInt(raw.slice(2, 4), 16);
+  const b = Number.parseInt(raw.slice(4, 6), 16);
+  if (![r, g, b].every((n) => Number.isFinite(n))) return null;
+  return { r, g, b };
+}
+
+function rgbDistanceSq(a: Rgb, b: Rgb): number {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
 @Injectable()
 export class GoogleCalendarService {
   private readonly logger = new Logger(GoogleCalendarService.name);
   private readonly lastAccessCheckAt = new Map<number, number>();
   private readonly accessCheckTtlMs = 60_000;
+
+  private eventColorsPalettePromise?: Promise<Array<{ id: string; rgb: Rgb }>>;
 
   // Evita "error typed/any" em usos do Prisma caso PrismaService não seja inferido corretamente.
   private readonly prismaDb: PrismaClient;
@@ -102,6 +124,66 @@ export class GoogleCalendarService {
     private readonly jwt: JwtService,
   ) {
     this.prismaDb = this.prisma as unknown as PrismaClient;
+  }
+
+  private getEventColorsPalette(
+    calendar: ReturnType<typeof google.calendar>,
+  ): Promise<Array<{ id: string; rgb: Rgb }>> {
+    if (this.eventColorsPalettePromise) return this.eventColorsPalettePromise;
+
+    this.eventColorsPalettePromise = (async () => {
+      try {
+        const res = await calendar.colors.get({});
+        const eventColors = res.data?.event ?? undefined;
+        if (!eventColors) return [];
+
+        const out: Array<{ id: string; rgb: Rgb }> = [];
+        for (const [id, cfg] of Object.entries(eventColors)) {
+          if (!isObjectRecord(cfg)) continue;
+          const bg = cfg.background;
+          if (typeof bg !== 'string') continue;
+          const rgb = parseHexRgb(bg);
+          if (!rgb) continue;
+          out.push({ id, rgb });
+        }
+
+        return out;
+      } catch (e) {
+        this.logger.warn(
+          `Falha ao buscar paleta de cores do Google: ${String(e)}`,
+        );
+        return [];
+      }
+    })();
+
+    return this.eventColorsPalettePromise;
+  }
+
+  private async resolveGoogleEventColorId(
+    calendar: ReturnType<typeof google.calendar>,
+    temaCorHex: string | null | undefined,
+  ): Promise<string | undefined> {
+    if (!temaCorHex) return undefined;
+    const temaRgb = parseHexRgb(temaCorHex);
+    if (!temaRgb) return undefined;
+
+    const palette = await this.getEventColorsPalette(calendar);
+    if (!palette.length) {
+      // Fallback: ainda tenta aplicar uma cor válida default para não ficar "sem cor".
+      return '1';
+    }
+
+    let bestId = palette[0].id;
+    let bestDist = rgbDistanceSq(temaRgb, palette[0].rgb);
+    for (let i = 1; i < palette.length; i++) {
+      const d = rgbDistanceSq(temaRgb, palette[i].rgb);
+      if (d < bestDist) {
+        bestDist = d;
+        bestId = palette[i].id;
+      }
+    }
+
+    return bestId;
   }
 
   private isOauthConfigured(): boolean {
@@ -665,7 +747,7 @@ export class GoogleCalendarService {
     slot: {
       id: number;
       diaSemana: DiaSemana;
-      tema: { tema: string };
+      tema: { tema: string; cor?: string | null };
       googleEventId: string | null;
     },
   ) {
@@ -681,6 +763,11 @@ export class GoogleCalendarService {
     const summary = `Cronograma: ${slot.tema.tema}`;
     const byDay = diaSemanaToByDay(slot.diaSemana);
 
+    const colorId = await this.resolveGoogleEventColorId(
+      calendar,
+      slot.tema.cor,
+    );
+
     const requestBody = {
       summary,
       description:
@@ -688,6 +775,7 @@ export class GoogleCalendarService {
       start: { date: startDate },
       end: { date: endDate },
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`],
+      ...(colorId ? { colorId } : {}),
     };
 
     try {
@@ -874,7 +962,7 @@ export class GoogleCalendarService {
       dataRevisao: Date;
       statusRevisao: StatusRevisao;
       googleEventId: string | null;
-      registroOrigem: { tema: { tema: string } | null };
+      registroOrigem: { tema: { tema: string; cor?: string | null } | null };
     },
   ) {
     const data = startOfDay(revisao.dataRevisao);
@@ -884,11 +972,17 @@ export class GoogleCalendarService {
     const tema = revisao.registroOrigem.tema?.tema ?? 'Tema';
     const summary = `Revisão: ${tema}`;
 
+    const colorId = await this.resolveGoogleEventColorId(
+      calendar,
+      revisao.registroOrigem.tema?.cor,
+    );
+
     const requestBody = {
       summary,
       description: `Revisão programada (${revisao.statusRevisao}) gerada automaticamente pelo Study Helper.`,
       start: { date: startDate },
       end: { date: endDate },
+      ...(colorId ? { colorId } : {}),
     };
 
     try {
