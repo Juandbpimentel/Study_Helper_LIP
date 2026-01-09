@@ -3,12 +3,17 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { CreateUserDto } from '@/auth/dtos/create-user.dto';
 import { UpdateUserDto } from '@/users/dto/update-user.dto';
 import { Prisma, Usuario } from '@prisma/client';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
@@ -75,9 +80,22 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<Usuario> {
     const email = this.normalizeEmail(createUserDto.email);
-    return await this.prisma.usuario.create({
-      data: { ...createUserDto, email },
-    });
+    try {
+      return await this.prisma.usuario.create({
+        data: { ...createUserDto, email },
+      });
+    } catch (err) {
+      if (isPrismaP2002(err)) {
+        const fields = getPrismaConstraintFields(err);
+        if (Array.isArray(fields) && fields.includes('email')) {
+          throw new ConflictException('O email já está em uso');
+        }
+        throw new BadRequestException(
+          'Violação de unicidade no banco de dados',
+        );
+      }
+      throw err;
+    }
   }
 
   async findOne(id: number): Promise<Usuario | null> {

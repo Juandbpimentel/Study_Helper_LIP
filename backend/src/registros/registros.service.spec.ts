@@ -313,6 +313,41 @@ describe('RegistrosService', () => {
     });
   });
 
+  it('criarComTx: se update de revisão falhar por P2002 deve lançar BadRequest', async () => {
+    const revisao = {
+      id: 123,
+      statusRevisao: StatusRevisao.Pendente,
+      registroOrigem: { temaId: 42 },
+    };
+
+    const tx = {
+      temaDeEstudo: { findFirst: jest.fn().mockResolvedValue(null) },
+      slotCronograma: { findFirst: jest.fn().mockResolvedValue(null) },
+      revisaoProgramada: {
+        findFirst: jest.fn().mockResolvedValue(revisao),
+        update: jest.fn().mockRejectedValue({
+          code: 'P2002',
+          meta: { constraint: { fields: ['registro_conclusao_id'] } },
+        }),
+      },
+      registroEstudo: {
+        create: jest.fn().mockResolvedValue({ id: 200, slotId: null }),
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    const service = new RegistrosService({} as any, {} as any, {} as any);
+
+    const dto: CreateRegistroDto = {
+      tipoRegistro: TipoRegistro.Revisao,
+      tempoDedicado: 10,
+      revisaoProgramadaId: 123,
+    } as any;
+
+    await expect(service.criarComTx(tx, 1, dto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
   it('criarComTx: Revisao já concluída lança BadRequest', async () => {
     const revisao = {
       id: 77,

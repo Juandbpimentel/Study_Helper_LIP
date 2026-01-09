@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import {
@@ -221,13 +225,32 @@ export class RegistrosService {
     }
 
     if (dto.tipoRegistro === TipoRegistro.Revisao && revisao) {
-      await tx.revisaoProgramada.update({
-        where: { id: revisao.id },
-        data: {
-          statusRevisao: StatusRevisao.Concluida,
-          registroConclusaoId: registro.id,
-        },
-      });
+      try {
+        await tx.revisaoProgramada.update({
+          where: { id: revisao.id },
+          data: {
+            statusRevisao: StatusRevisao.Concluida,
+            registroConclusaoId: registro.id,
+          },
+        });
+      } catch (err) {
+        if (isPrismaP2002(err)) {
+          const fields = getPrismaConstraintFields(err);
+          if (
+            Array.isArray(fields) &&
+            (fields.includes('registro_conclusao_id') ||
+              fields.includes('registroConclusaoId'))
+          ) {
+            throw new BadRequestException(
+              'Essa revisão já foi concluída anteriormente',
+            );
+          }
+          throw new BadRequestException(
+            'Violação de unicidade no banco de dados',
+          );
+        }
+        throw err;
+      }
     }
 
     return { registro, revisoesCriadasIds: [] as number[] };

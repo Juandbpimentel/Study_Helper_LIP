@@ -47,6 +47,34 @@ src/
     FRONTEND_URL=http://localhost:3000
     ```
 
+    Variáveis opcionais para **cookies** (úteis principalmente em produção):
+
+    ```env
+    # Cookies
+    # Use COOKIE_DOMAIN apenas se você controla o domínio pai (ex: .example.com).
+    # Na opção B (proxy do Netlify), normalmente NÃO precisa configurar.
+    COOKIE_DOMAIN=
+
+    # none|lax|strict (default: production -> none; dev -> lax)
+    COOKIE_SAMESITE=none
+
+    # true|false (default: production -> true; dev -> false)
+    COOKIE_SECURE=true
+
+    # Dias até expirar o cookie (default: 7)
+    COOKIE_EXPIRES_DAYS=7
+    ```
+
+    Variáveis opcionais para **tuning do pool/timeout** do PostgreSQL (pg pool via Prisma adapter):
+
+    ```env
+    # Prisma/PG Pool
+    PRISMA_POOL_MAX=20
+    PRISMA_CONNECTION_TIMEOUT_MS=5000
+    PRISMA_IDLE_TIMEOUT_MS=30000
+    PRISMA_STATEMENT_TIMEOUT_MS=15000
+    ```
+
     Se for usar a integração com **Google Calendar**, adicione também:
 
     ```env
@@ -141,3 +169,22 @@ Exemplo (base64):
 ```bash
     node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+## 🍪 Cookies + Netlify (Opção B: proxy)
+
+Se o frontend (Netlify) e o backend (Render) estiverem em domínios totalmente diferentes, cookies passam a ser **third-party** e podem ser bloqueados por navegadores.
+
+Uma solução prática é usar o **proxy do Netlify** para que o browser chame sempre o mesmo domínio do frontend:
+
+1. No frontend, crie `netlify.toml`:
+
+     ```toml
+     [[redirects]]
+         from = "/api/*"
+         to = "https://SEU_BACKEND.onrender.com/:splat"
+         status = 200
+         force = true
+     ```
+
+2. No frontend, chame a API via `/api/...` (ex.: `/api/auth/login`) e use `credentials: 'include'` / `withCredentials: true`.
+3. No backend, configure `FRONTEND_URL` para o domínio do Netlify e mantenha `credentials: true` no CORS (já configurado).
