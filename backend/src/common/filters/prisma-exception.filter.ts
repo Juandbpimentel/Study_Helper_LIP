@@ -2,23 +2,30 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
-  ConflictException,
   ServiceUnavailableException,
   BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { Request, Response } from 'express';
+import {
+  buildUniqueViolationMessage,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 
-@Catch(Prisma.PrismaClientKnownRequestError as any)
+function getPrismaErrorCode(exception: unknown): string | undefined {
+  if (typeof exception !== 'object' || exception === null) return undefined;
+  const code = (exception as Record<string, unknown>).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+@Catch(Prisma.PrismaClientKnownRequestError)
 export class PrismaExceptionFilter implements ExceptionFilter {
-  catch(
-    exception: Prisma.PrismaClientKnownRequestError | any,
-    host: ArgumentsHost,
-  ) {
+  catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const res = ctx.getResponse();
-    const req = ctx.getRequest();
+    const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest<Request>();
 
-    const code = (exception as any)?.code;
+    const code = getPrismaErrorCode(exception);
 
     if (code === 'ETIMEDOUT') {
       const err = new ServiceUnavailableException(
@@ -33,12 +40,12 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     }
 
     if (code === 'P2002') {
-      const err = new ConflictException(
-        'Violação de unicidade no banco de dados',
-      );
+      const fields = getPrismaConstraintFields(exception);
+      const err = new BadRequestException(buildUniqueViolationMessage(fields));
       res.status(err.getStatus()).json({
         statusCode: err.getStatus(),
         message: err.message,
+        fields,
         path: req?.url,
       });
       return;

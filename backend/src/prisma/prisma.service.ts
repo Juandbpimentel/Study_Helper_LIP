@@ -34,7 +34,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
     // Log de erro de pool (melhora diagnóstico)
     pool.on('error', (err) => {
-      // eslint-disable-next-line no-console
       console.error('PG Pool error:', err?.message ?? err);
     });
 

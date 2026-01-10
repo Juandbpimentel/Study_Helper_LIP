@@ -321,27 +321,51 @@ describe('RegistrosService', () => {
     };
 
     const tx = {
-      temaDeEstudo: { findFirst: jest.fn().mockResolvedValue(null) },
-      slotCronograma: { findFirst: jest.fn().mockResolvedValue(null) },
+      temaDeEstudo: {
+        findFirst: jest
+          .fn<Promise<null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
+          .mockResolvedValue(null),
+      },
+      slotCronograma: {
+        findFirst: jest
+          .fn<Promise<null>, [Prisma.SlotCronogramaFindFirstArgs]>()
+          .mockResolvedValue(null),
+      },
       revisaoProgramada: {
-        findFirst: jest.fn().mockResolvedValue(revisao),
-        update: jest.fn().mockRejectedValue({
-          code: 'P2002',
-          meta: { constraint: { fields: ['registro_conclusao_id'] } },
-        }),
+        findFirst: jest
+          .fn<
+            Promise<typeof revisao | null>,
+            [Prisma.RevisaoProgramadaFindFirstArgs]
+          >()
+          .mockResolvedValue(revisao),
+        update: jest
+          .fn<Promise<unknown>, [Prisma.RevisaoProgramadaUpdateArgs]>()
+          .mockRejectedValue({
+            code: 'P2002',
+            meta: { constraint: { fields: ['registro_conclusao_id'] } },
+          }),
       },
       registroEstudo: {
-        create: jest.fn().mockResolvedValue({ id: 200, slotId: null }),
+        create: jest
+          .fn<
+            Promise<{ id: number; slotId: number | null }>,
+            [Prisma.RegistroEstudoCreateArgs]
+          >()
+          .mockResolvedValue({ id: 200, slotId: null }),
       },
     } as unknown as Prisma.TransactionClient;
 
-    const service = new RegistrosService({} as any, {} as any, {} as any);
+    const service = new RegistrosService(
+      {} as unknown as PrismaService,
+      {} as unknown as GoogleCalendarService,
+      {} as unknown as OfensivaService,
+    );
 
     const dto: CreateRegistroDto = {
       tipoRegistro: TipoRegistro.Revisao,
       tempoDedicado: 10,
       revisaoProgramadaId: 123,
-    } as any;
+    };
 
     await expect(service.criarComTx(tx, 1, dto)).rejects.toBeInstanceOf(
       BadRequestException,

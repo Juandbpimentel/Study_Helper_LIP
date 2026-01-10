@@ -3,7 +3,6 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
-  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
@@ -13,6 +12,7 @@ import { Prisma, Usuario } from '@prisma/client';
 import {
   isPrismaP2002,
   getPrismaConstraintFields,
+  buildUniqueViolationMessage,
 } from '@/common/utils/prisma.utils';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -80,6 +80,18 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<Usuario> {
     const email = this.normalizeEmail(createUserDto.email);
+
+    // Pre-check de unicidade (evita depender do erro P2002 para feedback ao cliente).
+    const existing = await this.prisma.usuario.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        'A propriedade email deve ser única e está duplicada',
+      );
+    }
+
     try {
       return await this.prisma.usuario.create({
         data: { ...createUserDto, email },
@@ -87,12 +99,7 @@ export class UsersService {
     } catch (err) {
       if (isPrismaP2002(err)) {
         const fields = getPrismaConstraintFields(err);
-        if (Array.isArray(fields) && fields.includes('email')) {
-          throw new ConflictException('O email já está em uso');
-        }
-        throw new BadRequestException(
-          'Violação de unicidade no banco de dados',
-        );
+        throw new BadRequestException(buildUniqueViolationMessage(fields));
       }
       throw err;
     }

@@ -8,7 +8,7 @@ Este documento explica o funcionamento do backend do **Study Helper** (NestJS + 
 
 - **Framework:** NestJS (controllers, services, modules)
 - **Persistência:** Prisma ORM + PostgreSQL
-- **Autenticação:** JWT (Bearer e/ou cookie httpOnly)
+- **Autenticação:** JWT (Bearer)
 - **Documentação:** Swagger em `/docs`
 - **Integrações:** Google Calendar (OAuth + sync)
 - **Rotinas automáticas:** `@nestjs/schedule` com cron diário
@@ -38,8 +38,7 @@ Arquivo: `src/main.ts`
    - Normaliza origens via `new URL(origin).origin` (quando possível)
    - Em dev permite localhost/hoppscotch
    - Se a origem não for permitida, **não lança erro 500**: apenas responde sem CORS headers (o browser bloqueia naturalmente)
-4. **cookie-parser** habilitado
-5. **Swagger** em `/docs` via `SwaggerModule.setup('docs', ...)`
+4. **Swagger** em `/docs` via `SwaggerModule.setup('docs', ...)`
 
 ## 3) Banco de dados (Prisma) e entidades
 
@@ -73,7 +72,7 @@ Arquivo: `prisma/schema.prisma`
 ### Como o login funciona
 
 - `AuthService` valida credenciais (bcrypt) e emite JWT.
-- O controller grava o JWT também em cookie **httpOnly** para uso pelo frontend.
+- O cliente armazena o token (ex.: localStorage) e envia em `Authorization: Bearer <token>`.
 
 ### JWT e rotação
 

@@ -47,24 +47,6 @@ src/
     FRONTEND_URL=http://localhost:3000
     ```
 
-    Variáveis opcionais para **cookies** (úteis principalmente em produção):
-
-    ```env
-    # Cookies
-    # Use COOKIE_DOMAIN apenas se você controla o domínio pai (ex: .example.com).
-    # Na opção B (proxy do Netlify), normalmente NÃO precisa configurar.
-    COOKIE_DOMAIN=
-
-    # none|lax|strict (default: production -> none; dev -> lax)
-    COOKIE_SAMESITE=none
-
-    # true|false (default: production -> true; dev -> false)
-    COOKIE_SECURE=true
-
-    # Dias até expirar o cookie (default: 7)
-    COOKIE_EXPIRES_DAYS=7
-    ```
-
     Variáveis opcionais para **tuning do pool/timeout** do PostgreSQL (pg pool via Prisma adapter):
 
     ```env
@@ -156,9 +138,9 @@ npx prisma studio
 
 ### Rotas
 
-- `GET /integrations/google/oauth/start` (requer login/cookie JWT): inicia o consentimento e redireciona para o Google
+- `GET /integrations/google/oauth/start` (requer login/JWT Bearer): inicia o consentimento e redireciona para o Google
 - `GET /integrations/google/oauth/callback`: endpoint de retorno do Google (troca code por token + sync)
-- `DELETE /integrations/google/disconnect` (requer login/cookie JWT): remove a integração salva
+- `DELETE /integrations/google/disconnect` (requer login/JWT Bearer): remove a integração salva
 
 ### Chave GOOGLE_TOKEN_ENCRYPTION_KEY
 
@@ -169,22 +151,3 @@ Exemplo (base64):
 ```bash
     node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
-
-## 🍪 Cookies + Netlify (Opção B: proxy)
-
-Se o frontend (Netlify) e o backend (Render) estiverem em domínios totalmente diferentes, cookies passam a ser **third-party** e podem ser bloqueados por navegadores.
-
-Uma solução prática é usar o **proxy do Netlify** para que o browser chame sempre o mesmo domínio do frontend:
-
-1. No frontend, crie `netlify.toml`:
-
-     ```toml
-     [[redirects]]
-         from = "/api/*"
-         to = "https://SEU_BACKEND.onrender.com/:splat"
-         status = 200
-         force = true
-     ```
-
-2. No frontend, chame a API via `/api/...` (ex.: `/api/auth/login`) e use `credentials: 'include'` / `withCredentials: true`.
-3. No backend, configure `FRONTEND_URL` para o domínio do Netlify e mantenha `credentials: true` no CORS (já configurado).

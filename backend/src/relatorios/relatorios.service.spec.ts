@@ -7,6 +7,14 @@ import type { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
 import type { Prisma } from '@prisma/client';
 import { StatusRevisao } from '@prisma/client';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 describe('RelatoriosService', () => {
   afterEach(() => {
     jest.useRealTimers();
@@ -17,13 +25,17 @@ describe('RelatoriosService', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-11-13T16:30:00.000Z'));
 
-    const prisma = {} as unknown as PrismaService;
-    const metrics = {} as unknown as MetricsService;
-    const ofensiva = {} as unknown as OfensivaService;
+    const prisma: PrismaService = {} as unknown as PrismaService;
+    const metrics: MetricsService = {} as unknown as MetricsService;
+    const ofensiva: OfensivaService = {} as unknown as OfensivaService;
 
-    const service = new RelatoriosService(prisma, metrics, ofensiva);
+    const service: RelatoriosService = new RelatoriosService(
+      prisma,
+      metrics,
+      ofensiva,
+    );
 
-    jest.spyOn(service, 'resumo').mockResolvedValue({
+    const resumo: Awaited<ReturnType<RelatoriosService['resumo']>> = {
       periodo: { dataInicial: null, dataFinal: null },
       ofensiva: {
         atual: 0,
@@ -43,22 +55,39 @@ describe('RelatoriosService', () => {
       revisoesExpiradas: 0,
       revisoesHoje: 0,
       desempenhoPorTema: [],
-    } as any);
+    };
 
-    const req = await service.buildResumoPdfRequest(1, {
-      dataInicial: '2026-11-01',
-      dataFinal: '2026-11-30',
+    jest.spyOn(service, 'resumo').mockResolvedValue(resumo);
+
+    await Promise.resolve<unknown>(
+      service.buildResumoPdfRequest(1, {
+        dataInicial: '2026-11-01',
+        dataFinal: '2026-11-30',
+      }) as unknown,
+    ).then((reqUnknown) => {
+      if (!isRecord(reqUnknown)) throw new Error('request inválido');
+      const dataUnknown = reqUnknown['data'];
+      if (!isRecord(dataUnknown)) throw new Error('data inválido');
+
+      const secoesRaw = dataUnknown['secoes'];
+      if (!Array.isArray(secoesRaw)) {
+        throw new Error('Seções do PDF não encontradas');
+      }
+
+      const header = secoesRaw.find((secao) => {
+        if (!isRecord(secao)) return false;
+        return secao['componente'] === 'header_corporativo';
+      });
+
+      if (!isRecord(header)) {
+        throw new Error('Seção header_corporativo não encontrada');
+      }
+
+      const referencia = header['referencia'];
+      if (!isString(referencia)) throw new Error('referencia inválida');
+
+      expect(referencia).toBe('1/11/2026 00:00 a 30/11/2026 23:59');
     });
-
-    const secoes = (req as any).data?.secoes as any[] | undefined;
-    if (!secoes) throw new Error('Seções do PDF não encontradas');
-
-    const header = secoes.find(
-      (s: any) => s.componente === 'header_corporativo',
-    );
-    if (!header) throw new Error('Seção header_corporativo não encontrada');
-
-    expect(header.referencia).toBe('1/11/2026 00:00 a 30/11/2026 23:59');
   });
 
   it('resumo: lança BadRequest quando dataInicial é inválida', async () => {

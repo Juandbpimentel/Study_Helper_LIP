@@ -1,6 +1,23 @@
 import { GlobalExceptionFilter } from './global-exception.filter';
 import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 
+declare const process: {
+  env: {
+    NODE_ENV?: string;
+  };
+};
+
+type MockResponse = {
+  status: (statusCode: number) => MockResponse;
+  json: (body: unknown) => MockResponse;
+};
+
+type MockRequest = { url: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
 
@@ -8,28 +25,35 @@ describe('GlobalExceptionFilter', () => {
     filter = new GlobalExceptionFilter();
   });
 
-  function mockHost() {
-    const status = jest.fn().mockReturnThis();
-    const json = jest.fn().mockReturnThis();
-    const res = { status, json };
-    const req = { url: '/test' };
+  it('should include stack and cause in non-production for unexpected errors', () => {
+    const statusCalls: number[] = [];
+    const jsonCalls: unknown[] = [];
+
+    const res: MockResponse = {
+      status: (code: number) => {
+        statusCalls.push(code);
+        return res;
+      },
+      json: (body: unknown) => {
+        jsonCalls.push(body);
+        return res;
+      },
+    };
+
+    const req: MockRequest = { url: '/test' };
     const host = {
       switchToHttp: () => ({ getResponse: () => res, getRequest: () => req }),
     } as unknown as ArgumentsHost;
-    return { host, status, json, req };
-  }
 
-  it('should include stack and cause in non-production for unexpected errors', () => {
-    const { host, status, json, req } = mockHost();
-    process.env.NODE_ENV = 'development';
+    Reflect.set(process.env as unknown as object, 'NODE_ENV', 'development');
 
-    const err = new Error('boom');
-    (err as any).cause = { reason: 'db-failure' };
+    const err = new Error('boom', { cause: { reason: 'db-failure' } });
 
     filter.catch(err, host);
 
-    expect(status).toHaveBeenCalledWith(500);
-    expect(json).toHaveBeenCalledWith(
+    expect(statusCalls).toEqual([500]);
+    expect(jsonCalls).toHaveLength(1);
+    expect(jsonCalls[0]).toEqual(
       expect.objectContaining({
         statusCode: 500,
         path: req.url,
@@ -40,34 +64,74 @@ describe('GlobalExceptionFilter', () => {
   });
 
   it('should not include stack/cause in production', () => {
-    const { host, status, json, req } = mockHost();
-    process.env.NODE_ENV = 'production';
+    const statusCalls: number[] = [];
+    const jsonCalls: unknown[] = [];
 
-    const err = new Error('boom');
-    (err as any).cause = { reason: 'db-failure' };
+    const res: MockResponse = {
+      status: (code: number) => {
+        statusCalls.push(code);
+        return res;
+      },
+      json: (body: unknown) => {
+        jsonCalls.push(body);
+        return res;
+      },
+    };
+
+    const req: MockRequest = { url: '/test' };
+    const host = {
+      switchToHttp: () => ({ getResponse: () => res, getRequest: () => req }),
+    } as unknown as ArgumentsHost;
+
+    Reflect.set(process.env as unknown as object, 'NODE_ENV', 'production');
+
+    const err = new Error('boom', { cause: { reason: 'db-failure' } });
 
     filter.catch(err, host);
 
-    expect(status).toHaveBeenCalledWith(500);
-    expect(json).toHaveBeenCalledWith(
+    expect(statusCalls).toEqual([500]);
+    expect(jsonCalls).toHaveLength(1);
+    expect(jsonCalls[0]).toEqual(
       expect.objectContaining({ statusCode: 500, path: req.url }),
     );
-    const body = (json as jest.Mock).mock.calls[0][0];
+
+    const body = jsonCalls[0];
+    if (!isRecord(body)) throw new Error('body inválido');
     expect(body.stack).toBeUndefined();
     expect(body.cause).toBeUndefined();
   });
 
   it('should handle HttpException and include stack in non-prod', () => {
-    const { host, status, json, req } = mockHost();
-    process.env.NODE_ENV = 'development';
+    const statusCalls: number[] = [];
+    const jsonCalls: unknown[] = [];
 
-    const http = new HttpException('Bad', HttpStatus.BAD_REQUEST);
-    (http as any).cause = { reason: 'bad-input' };
+    const res: MockResponse = {
+      status: (code: number) => {
+        statusCalls.push(code);
+        return res;
+      },
+      json: (body: unknown) => {
+        jsonCalls.push(body);
+        return res;
+      },
+    };
+
+    const req: MockRequest = { url: '/test' };
+    const host = {
+      switchToHttp: () => ({ getResponse: () => res, getRequest: () => req }),
+    } as unknown as ArgumentsHost;
+
+    Reflect.set(process.env as unknown as object, 'NODE_ENV', 'development');
+
+    const http = new HttpException('Bad', HttpStatus.BAD_REQUEST, {
+      cause: { reason: 'bad-input' },
+    });
 
     filter.catch(http, host);
 
-    expect(status).toHaveBeenCalledWith(400);
-    expect(json).toHaveBeenCalledWith(
+    expect(statusCalls).toEqual([400]);
+    expect(jsonCalls).toHaveLength(1);
+    expect(jsonCalls[0]).toEqual(
       expect.objectContaining({
         statusCode: 400,
         path: req.url,

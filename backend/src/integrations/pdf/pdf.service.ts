@@ -1,5 +1,22 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getErrorMessage(err: unknown): string | undefined {
+  if (err instanceof Error) return err.message;
+  if (!isRecord(err)) return undefined;
+  const msg = err.message;
+  return typeof msg === 'string' ? msg : undefined;
+}
+
+function getErrorStringProp(err: unknown, prop: string): string | undefined {
+  if (!isRecord(err)) return undefined;
+  const v = err[prop];
+  return typeof v === 'string' ? v : undefined;
+}
+
 function truncateForLogs(input: string, maxLen: number): string {
   if (input.length <= maxLen) return input;
   return `${input.slice(0, maxLen)}... (truncated)`;
@@ -112,7 +129,7 @@ export class PdfService {
           headers: {
             Accept: 'application/json, text/plain, */*',
           },
-          signal: controller.signal as any,
+          signal: controller.signal,
         });
 
         clearTimeout(timeout);
@@ -141,13 +158,13 @@ export class PdfService {
         this.logger.warn(
           `PDF warm-up returned ${res.status}; retrying in ${intervalMs}ms`,
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timeout);
 
         if (err instanceof HttpException) throw err;
 
         this.logger.warn(
-          `PDF warm-up failed; retrying in ${intervalMs}ms: ${err?.message ?? String(err)}`,
+          `PDF warm-up failed; retrying in ${intervalMs}ms: ${getErrorMessage(err) ?? String(err)}`,
         );
       }
 
@@ -203,7 +220,7 @@ export class PdfService {
             Accept: 'application/pdf, application/json',
           },
           body: JSON.stringify(request),
-          signal: controller.signal as any,
+          signal: controller.signal,
         });
 
         clearTimeout(timeout);
@@ -272,9 +289,9 @@ export class PdfService {
                 statusCode: status,
                 raw,
               },
-          status as number,
+          status,
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timeout);
 
         // If we intentionally threw an HttpException (non-retriable), bubble it up.
@@ -285,19 +302,19 @@ export class PdfService {
         lastError = err;
 
         const isAbort =
-          err &&
-          (err.name === 'AbortError' || (err.type && err.type === 'aborted'));
-        const isNetwork =
-          err &&
-          (err.code === 'ECONNREFUSED' ||
-            err.code === 'ECONNRESET' ||
-            err.code === 'ENOTFOUND' ||
-            err.code === 'ETIMEDOUT');
+          getErrorStringProp(err, 'name') === 'AbortError' ||
+          getErrorStringProp(err, 'type') === 'aborted';
+        const isNetwork = [
+          'ECONNREFUSED',
+          'ECONNRESET',
+          'ENOTFOUND',
+          'ETIMEDOUT',
+        ].includes(getErrorStringProp(err, 'code') ?? '');
 
         if (attempt < maxRetries && (isAbort || isNetwork)) {
           const delayMs = Math.round(baseDelay * Math.pow(1.5, attempt - 1));
           this.logger.warn(
-            `PDF request failed (attempt ${attempt}) - retrying in ${delayMs}ms: ${err?.message ?? String(err)}`,
+            `PDF request failed (attempt ${attempt}) - retrying in ${delayMs}ms: ${getErrorMessage(err) ?? String(err)}`,
           );
           await sleep(delayMs);
           continue;
@@ -310,9 +327,7 @@ export class PdfService {
 
     // Exhausted retries / timeout
     const message =
-      lastError && typeof lastError === 'object' && 'message' in lastError
-        ? (lastError as any).message
-        : 'Falha ao gerar PDF no microserviço.';
+      getErrorMessage(lastError) ?? 'Falha ao gerar PDF no microserviço.';
 
     const rawOut = truncateForLogs(JSON.stringify(lastError ?? {}), 2000);
 

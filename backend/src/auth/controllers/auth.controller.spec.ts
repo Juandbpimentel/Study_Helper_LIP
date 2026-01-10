@@ -1,8 +1,7 @@
 import { AuthController } from './auth.controller';
 import { AuthService } from '../services/auth.service';
 import { UsersService } from '@/users/users.service';
-import { Response, Request } from 'express';
-import { AUTH_COOKIE_NAME } from '../auth.constants';
+import { Request } from 'express';
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
 import { DiaSemana, Usuario } from '@prisma/client';
@@ -24,10 +23,9 @@ describe('AuthController', () => {
   type ChangePasswordReq = Parameters<AuthController['changePassword']>[0];
   type ChangeEmailReq = Parameters<AuthController['changeEmail']>[0];
   type LoginReq = Parameters<AuthController['login']>[1];
-  let responseMock: jest.Mocked<Pick<Response, 'cookie' | 'clearCookie'>>;
   let user: Usuario;
   const authResult = {
-    [AUTH_COOKIE_NAME]: 'token-123',
+    access_token: 'token-123',
     user: {
       id: 1,
       email: 'john@example.com',
@@ -84,11 +82,6 @@ describe('AuthController', () => {
       senha: string,
     ) => Promise<Usuario>
   >;
-  let cookieMock: jest.MockedFunction<
-    (this: void, name: string, value: string, options?: any) => void
-  >;
-  let clearCookieMock: jest.MockedFunction<(this: void, name: string) => void>;
-
   beforeEach(() => {
     // AuthService mocks - explicit this: void
     loginMock = jest.fn() as jest.MockedFunction<
@@ -134,19 +127,6 @@ describe('AuthController', () => {
       changeEmail: changeEmailMock,
     } as unknown as jest.Mocked<UsersService>;
 
-    // Response mocks - explicit this: void
-    cookieMock = jest.fn() as jest.MockedFunction<
-      (this: void, name: string, value: string, options?: any) => void
-    >;
-    clearCookieMock = jest.fn() as jest.MockedFunction<
-      (this: void, name: string) => void
-    >;
-
-    responseMock = {
-      cookie: cookieMock,
-      clearCookie: clearCookieMock,
-    } as unknown as jest.Mocked<Pick<Response, 'cookie' | 'clearCookie'>>;
-
     googleCalendarMock = {
       verifyAccessAndCleanupIfRevoked: jest.fn().mockResolvedValue(true),
       getBackendStatus: jest.fn().mockReturnValue(googleBackendStatus),
@@ -184,47 +164,20 @@ describe('AuthController', () => {
       updatedAt: new Date('2024-01-01T00:00:00.000Z'),
     };
   });
-  it('deve autenticar via login e definir cookie', () => {
+
+  it('deve autenticar via login e retornar token', () => {
     const body: LoginRequestDto = { email: user.email, senha: 'secret' };
 
     const req: LoginReq = { user } as unknown as LoginReq;
-    const result = controller.login(
-      body,
-      req,
-      responseMock as unknown as Response,
-    );
+    const result = controller.login(body, req);
 
     expect(loginFromGuardMock).toHaveBeenCalledWith(user);
-    expect(cookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      authResult[AUTH_COOKIE_NAME],
-      expect.objectContaining({ httpOnly: true }),
-    );
     expect(result).toEqual({
       message: 'Login Realizado com Sucesso',
       ...authResult,
       ofensiva: ofensivaResumo,
       googleCalendar: googleBackendStatus,
     });
-  });
-
-  it('should include domain when COOKIE_DOMAIN env var is set', () => {
-    const prev = process.env.COOKIE_DOMAIN;
-    process.env.COOKIE_DOMAIN = '.example.com';
-
-    const body: LoginRequestDto = { email: user.email, senha: 'secret' };
-    const req: LoginReq = { user } as unknown as LoginReq;
-
-    controller.login(body, req, responseMock as unknown as Response);
-
-    expect(cookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      authResult[AUTH_COOKIE_NAME],
-      expect.objectContaining({ domain: '.example.com' }),
-    );
-
-    if (prev === undefined) delete process.env.COOKIE_DOMAIN;
-    else process.env.COOKIE_DOMAIN = prev;
   });
 
   it('deve registrar e retornar token + usuário', async () => {
@@ -234,17 +187,9 @@ describe('AuthController', () => {
       senha: 'secret',
     };
 
-    const result = await controller.register(
-      body,
-      responseMock as unknown as Response,
-    );
+    const result = await controller.register(body);
 
     expect(registerMock).toHaveBeenCalledWith(body);
-    expect(cookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      authResult[AUTH_COOKIE_NAME],
-      expect.any(Object),
-    );
     expect(result).toEqual({
       message: 'Usuário registrado com sucesso',
       ...authResult,
@@ -259,11 +204,7 @@ describe('AuthController', () => {
     const updatedUser = { ...user, senha: 'hashed-new' } as Usuario;
     changePasswordMock.mockResolvedValue(updatedUser);
 
-    const result = await controller.changePassword(
-      req,
-      body,
-      responseMock as unknown as Response,
-    );
+    const result = await controller.changePassword(req, body);
 
     expect(changePasswordMock).toHaveBeenCalledWith(
       user.id,
@@ -271,11 +212,6 @@ describe('AuthController', () => {
       body.novaSenha,
     );
     expect(loginFromGuardMock).toHaveBeenCalledWith(updatedUser);
-    expect(cookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      authResult[AUTH_COOKIE_NAME],
-      expect.any(Object),
-    );
     expect(result).toEqual({
       message: 'Senha alterada com sucesso',
       ...authResult,
@@ -289,11 +225,7 @@ describe('AuthController', () => {
     const updatedUser = { ...user, email: body.novoEmail } as Usuario;
     changeEmailMock.mockResolvedValue(updatedUser);
 
-    const result = await controller.changeEmail(
-      req,
-      body,
-      responseMock as unknown as Response,
-    );
+    const result = await controller.changeEmail(req, body);
 
     expect(changeEmailMock).toHaveBeenCalledWith(
       user.id,
@@ -301,11 +233,6 @@ describe('AuthController', () => {
       body.senha,
     );
     expect(loginFromGuardMock).toHaveBeenCalledWith(updatedUser);
-    expect(cookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      authResult[AUTH_COOKIE_NAME],
-      expect.any(Object),
-    );
     expect(result).toEqual({
       message: 'Email alterado com sucesso',
       ...authResult,
@@ -314,24 +241,15 @@ describe('AuthController', () => {
   });
 
   it('deve limpar o cookie no logout', () => {
-    const result = controller.logout(responseMock as unknown as Response);
-
-    expect(clearCookieMock).toHaveBeenCalledWith(
-      AUTH_COOKIE_NAME,
-      expect.objectContaining({ httpOnly: true, path: '/' }),
-    );
+    const result = controller.logout();
     expect(result).toEqual({ message: 'Logout realizado com sucesso' });
   });
 
-  it('cookie-check should return whether auth cookie is present', () => {
-    const reqWithCookie = {
-      cookies: { [AUTH_COOKIE_NAME]: 'token-123' },
-    } as unknown as Request;
-    const reqWithoutCookie = { cookies: {} } as unknown as Request;
-
-    expect(controller.cookieCheck(reqWithCookie)).toEqual({ hasCookie: true });
-    expect(controller.cookieCheck(reqWithoutCookie)).toEqual({
-      hasCookie: false,
+  it('token-only: does not depend on cookies', () => {
+    const req = { headers: {} } as unknown as Request;
+    void req;
+    expect(controller.logout()).toEqual({
+      message: 'Logout realizado com sucesso',
     });
   });
 });

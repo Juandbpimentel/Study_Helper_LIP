@@ -3,10 +3,6 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import {
-  isPrismaP2002,
-  getPrismaConstraintFields,
-} from '@/common/utils/prisma.utils';
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateThemeDto } from './dto/create-theme.dto';
 import { UpdateThemeDto } from './dto/update-theme.dto';

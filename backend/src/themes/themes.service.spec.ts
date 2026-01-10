@@ -59,7 +59,7 @@ describe('ThemesService', () => {
 
     const service = new ThemesService(prisma);
 
-    const dto: CreateThemeDto = { tema: 'Matemática' } as any;
+    const dto: CreateThemeDto = { tema: 'Matemática' };
 
     await expect(service.create(7, dto)).rejects.toThrow(
       'Tema com esse nome já existe',
@@ -147,8 +147,8 @@ describe('ThemesService', () => {
   it('update: valida ownership e atualiza com normalização de cor', async () => {
     const findFirst = jest
       .fn<Promise<{ id: number } | null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
-      .mockImplementationOnce(async () => ({ id: 10 }))
-      .mockImplementationOnce(async () => null);
+      .mockImplementationOnce(() => Promise.resolve({ id: 10 }))
+      .mockImplementationOnce(() => Promise.resolve(null));
 
     const update = jest
       .fn<Promise<{ id: number }>, [Prisma.TemaDeEstudoUpdateArgs]>()
@@ -183,8 +183,8 @@ describe('ThemesService', () => {
     // Na segunda chamada (checagem de duplicidade) retornamos um tema conflitante
     const findFirst = jest
       .fn<Promise<{ id: number } | null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
-      .mockImplementationOnce(async () => ({ id: 10 }))
-      .mockImplementationOnce(async () => ({ id: 11 }));
+      .mockImplementationOnce(() => Promise.resolve({ id: 10 }))
+      .mockImplementationOnce(() => Promise.resolve({ id: 11 }));
 
     const update = jest
       .fn<Promise<{ id: number }>, [Prisma.TemaDeEstudoUpdateArgs]>()
@@ -196,7 +196,7 @@ describe('ThemesService', () => {
 
     const service = new ThemesService(prisma);
 
-    const dto: UpdateThemeDto = { tema: 'Duplicado' } as any;
+    const dto: UpdateThemeDto = { tema: 'Duplicado' };
 
     await expect(service.update(7, 10, dto)).rejects.toThrow(
       'Tema com esse nome já existe',

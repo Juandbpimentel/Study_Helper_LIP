@@ -15,9 +15,8 @@ Este documento descreve, de forma **minuciosa**, os endpoints do backend (NestJS
 ### Autenticação
 
 - A maioria das rotas exige autenticação via **JWT**.
-- O token é retornado no campo JSON `access_token` e também é gravado como cookie **httpOnly** com nome `access_token` (ou o valor de `AUTH_COOKIE_NAME`).
-- Rotas autenticadas aceitam:
-  - Cookie `access_token` (padrão)
+- O token é retornado no campo JSON `access_token`.
+- Rotas autenticadas exigem:
   - Header `Authorization: Bearer <token>`
 
 ### Datas e horários (ISO)
@@ -98,7 +97,7 @@ Valores possíveis:
 
 ### `POST /auth/login`
 
-**Descrição:** Autentica usuário, emite JWT e grava cookie httpOnly.
+**Descrição:** Autentica usuário e emite JWT.
 
 **Auth:** não (usa credenciais)
 
@@ -110,13 +109,9 @@ Valores possíveis:
 **Resposta 200 (AuthSuccessResponseDto):**
 
 - `message` (string): mensagem de confirmação
-- `access_token` (string): JWT (também setado no cookie)
+- `access_token` (string): JWT
 - `user` (UserResponseDto): dados públicos do usuário
 - `googleCalendar` (GoogleCalendarBackendStatusDto): status do suporte a Google Calendar
-
-**Efeitos colaterais:**
-
-- Define cookie `access_token` (httpOnly). Em cenários cross-site, usa `SameSite=None` e `Secure`.
 
 **Exemplo de request:**
 
@@ -128,7 +123,7 @@ Valores possíveis:
 
 ### `POST /auth/logout`
 
-**Descrição:** Encerra sessão removendo o cookie.
+**Descrição:** Token-only: o logout é responsabilidade do cliente (ex.: limpar o token do localStorage).
 
 **Auth:** opcional (pode chamar mesmo sem login)
 
@@ -140,7 +135,7 @@ Valores possíveis:
 
 ### `POST /auth/register`
 
-**Descrição:** Cria usuário, emite JWT inicial e grava cookie.
+**Descrição:** Cria usuário e emite JWT inicial.
 
 **Auth:** não
 
@@ -156,7 +151,7 @@ Valores possíveis:
 
 **Erros comuns:**
 
-- `409 Conflict`: email já está em uso
+- `400 Bad Request`: email já está em uso
 
 ---
 
@@ -164,7 +159,7 @@ Valores possíveis:
 
 **Descrição:** Retorna perfil do usuário autenticado.
 
-**Auth:** sim (cookie ou bearer)
+**Auth:** sim (bearer)
 
 **Resposta 200 (AuthProfileResponseDto):**
 
@@ -185,7 +180,7 @@ Valores possíveis:
 
 ### `PATCH /auth/change-password`
 
-**Descrição:** Troca senha e **rota** o token (novo JWT + cookie atualizado).
+**Descrição:** Troca senha e **rota** o token (novo JWT).
 
 **Auth:** sim
 

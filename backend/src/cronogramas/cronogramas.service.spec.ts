@@ -5,6 +5,11 @@ import type { GoogleCalendarService } from '@/integrations/google/google-calenda
 import type { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
 import type { DiaSemana, Prisma } from '@prisma/client';
 
+type SlotWithTema = Prisma.SlotCronogramaGetPayload<{
+  include: { tema: true };
+}>;
+type RegistroSlotConclusao = { slotId: number | null; dataEstudo: Date };
+
 describe('CronogramasService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -34,7 +39,7 @@ describe('CronogramasService', () => {
       });
 
     const slotFindMany = jest
-      .fn<Promise<any[]>, [Prisma.SlotCronogramaFindManyArgs]>()
+      .fn<Promise<SlotWithTema[]>, [Prisma.SlotCronogramaFindManyArgs]>()
       .mockResolvedValue([
         {
           id: 1,
@@ -43,10 +48,13 @@ describe('CronogramasService', () => {
           createdAt: new Date('2026-01-08T14:46:04.101Z'),
           tema: { id: 1, tema: 'IA' },
         },
-      ]);
+      ] as SlotWithTema[]);
 
     const registroFindMany = jest
-      .fn<Promise<any[]>, [Prisma.RegistroEstudoFindManyArgs]>()
+      .fn<
+        Promise<RegistroSlotConclusao[]>,
+        [Prisma.RegistroEstudoFindManyArgs]
+      >()
       .mockResolvedValue([]);
 
     const prisma = {
@@ -119,7 +127,7 @@ describe('CronogramasService', () => {
         [Prisma.CronogramaSemanalFindUniqueArgs]
       >()
       .mockResolvedValueOnce(null)
-      .mockImplementation(async () => ({ id: 99, creatorId: 5 }));
+      .mockImplementation(() => Promise.resolve({ id: 99, creatorId: 5 }));
 
     const cronogramaCreate = jest
       .fn<Promise<{ id: number }>, [Prisma.CronogramaSemanalCreateArgs]>()
@@ -130,11 +138,16 @@ describe('CronogramasService', () => {
 
     const usuarioFindUnique = jest
       .fn<
-        Promise<{ maxSlotsPorDia: number | null } | null>,
+        Promise<{
+          primeiroDiaSemana: DiaSemana;
+          slotAtrasoToleranciaDias: number;
+          slotAtrasoMaxDias: number;
+          maxSlotsPorDia: number | null;
+        } | null>,
         [Prisma.UsuarioFindUniqueArgs]
       >()
       .mockResolvedValue({
-        primeiroDiaSemana: 'Dom' as any,
+        primeiroDiaSemana: 'Dom' as DiaSemana,
         slotAtrasoToleranciaDias: 0,
         slotAtrasoMaxDias: 7,
         maxSlotsPorDia: null,
@@ -154,15 +167,20 @@ describe('CronogramasService', () => {
       slotCronograma: { findMany: jest.fn().mockResolvedValue([]) },
       registroEstudo: { findMany: jest.fn().mockResolvedValue([]) },
       $Transaction: undefined,
-      $transaction: jest.fn(async (cb: any) =>
-        cb({
-          slotCronograma: {
-            findMany: txSlotFindMany,
-            update: txSlotUpdate,
-            create: txSlotCreate,
-            deleteMany: txSlotDeleteMany,
-          },
-        }),
+      $transaction: jest.fn(
+        (
+          cb: (
+            tx: Pick<Prisma.TransactionClient, 'slotCronograma'>,
+          ) => Promise<unknown>,
+        ) =>
+          cb({
+            slotCronograma: {
+              findMany: txSlotFindMany,
+              update: txSlotUpdate,
+              create: txSlotCreate,
+              deleteMany: txSlotDeleteMany,
+            },
+          } as unknown as Pick<Prisma.TransactionClient, 'slotCronograma'>),
       ),
     } as unknown as PrismaService;
 
@@ -177,7 +195,10 @@ describe('CronogramasService', () => {
       syncSlotsForUser,
     };
 
-    const service = new CronogramasService(prisma, googleCalendar as any);
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
 
     const dto: UpsertCronogramaDto = { slots: [] };
 

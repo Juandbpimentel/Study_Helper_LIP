@@ -3,6 +3,9 @@ import { PrismaService } from '@/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { DiaSemana, Usuario } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import type { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
+import type { CreateUserDto } from '@/auth/dtos/create-user.dto';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -21,29 +24,41 @@ describe('UsersService', () => {
   let service: UsersService;
   let prismaMock: {
     usuario: {
-      findUnique: jest.Mock;
-      findFirst: jest.Mock;
-      update: jest.Mock;
-      create: jest.Mock;
-      findMany: jest.Mock;
-      delete: jest.Mock;
+      findUnique: jest.Mock<
+        Promise<Usuario | null>,
+        [Prisma.UsuarioFindUniqueArgs]
+      >;
+      findFirst: jest.Mock<
+        Promise<{ id: number } | null>,
+        [Prisma.UsuarioFindFirstArgs]
+      >;
+      update: jest.Mock<Promise<Usuario>, [Prisma.UsuarioUpdateArgs]>;
+      create: jest.Mock<Promise<Usuario>, [Prisma.UsuarioCreateArgs]>;
+      findMany: jest.Mock<Promise<Usuario[]>, [Prisma.UsuarioFindManyArgs]>;
+      delete: jest.Mock<Promise<Usuario>, [Prisma.UsuarioDeleteArgs]>;
     };
   };
   let baseUser: Usuario;
-  let googleCalendarMock: {
-    deleteSlotEventsByEventIds: jest.Mock;
-    deleteRevisionEventsByEventIds: jest.Mock;
-  };
+  let googleCalendarMock: Pick<
+    GoogleCalendarService,
+    'deleteSlotEventsByEventIds' | 'deleteRevisionEventsByEventIds'
+  >;
 
   beforeEach(() => {
     prismaMock = {
       usuario: {
-        findUnique: jest.fn(),
-        findFirst: jest.fn(),
-        update: jest.fn(),
-        create: jest.fn(),
-        findMany: jest.fn(),
-        delete: jest.fn(),
+        findUnique: jest.fn<
+          Promise<Usuario | null>,
+          [Prisma.UsuarioFindUniqueArgs]
+        >(),
+        findFirst: jest.fn<
+          Promise<{ id: number } | null>,
+          [Prisma.UsuarioFindFirstArgs]
+        >(),
+        update: jest.fn<Promise<Usuario>, [Prisma.UsuarioUpdateArgs]>(),
+        create: jest.fn<Promise<Usuario>, [Prisma.UsuarioCreateArgs]>(),
+        findMany: jest.fn<Promise<Usuario[]>, [Prisma.UsuarioFindManyArgs]>(),
+        delete: jest.fn<Promise<Usuario>, [Prisma.UsuarioDeleteArgs]>(),
       },
     };
 
@@ -54,7 +69,7 @@ describe('UsersService', () => {
 
     service = new UsersService(
       prismaMock as unknown as PrismaService,
-      googleCalendarMock as any,
+      googleCalendarMock as unknown as GoogleCalendarService,
     );
 
     baseUser = {
@@ -85,23 +100,41 @@ describe('UsersService', () => {
 
   describe('create', () => {
     it('should normalize email and create user', async () => {
-      const dto = {
+      const dto: CreateUserDto = {
         email: ' JOHN@EXAMPLE.COM ',
         nome: 'John',
         senha: 'hashed',
-      } as any;
+      };
       const created: Usuario = { ...baseUser, email: 'john@example.com' };
+      prismaMock.usuario.findFirst.mockResolvedValue(null);
       prismaMock.usuario.create.mockResolvedValue(created);
 
       const result = await service.create(dto);
 
+      expect(prismaMock.usuario.findFirst).toHaveBeenCalledWith({
+        where: { email: { equals: 'john@example.com', mode: 'insensitive' } },
+        select: { id: true },
+      });
       expect(prismaMock.usuario.create).toHaveBeenCalledWith({
         data: { ...dto, email: 'john@example.com' },
       });
       expect(result.email).toBe('john@example.com');
     });
 
-    it('should throw ConflictException when email already in use', async () => {
+    it('should throw BadRequestException when email already in use (pre-check)', async () => {
+      prismaMock.usuario.findFirst.mockResolvedValue({ id: 123 });
+
+      await expect(
+        service.create({
+          email: 'x@example.com',
+          nome: 'X',
+          senha: 's',
+        }),
+      ).rejects.toThrow('A propriedade email deve ser única');
+    });
+
+    it('should throw BadRequestException on P2002 (race condition fallback)', async () => {
+      prismaMock.usuario.findFirst.mockResolvedValue(null);
       prismaMock.usuario.create.mockRejectedValue({
         code: 'P2002',
         meta: { constraint: { fields: ['email'] } },
@@ -112,8 +145,8 @@ describe('UsersService', () => {
           email: 'x@example.com',
           nome: 'X',
           senha: 's',
-        } as any),
-      ).rejects.toThrow('O email já está em uso');
+        }),
+      ).rejects.toThrow('A propriedade email deve ser única');
     });
   });
 

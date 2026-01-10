@@ -5,12 +5,12 @@ import * as bcrypt from 'bcrypt';
 import { Usuario } from '@prisma/client';
 import { CreateUserDto } from '@/auth/dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
-import { AUTH_COOKIE_NAME } from '@/auth/auth.constants';
+import { AUTH_ACCESS_TOKEN_FIELD } from '@/auth/auth.constants';
 
 type PublicUser = Omit<Usuario, 'senha'>;
 
 export type AuthResult = {
-  [AUTH_COOKIE_NAME]: string;
+  [AUTH_ACCESS_TOKEN_FIELD]: string;
   user: PublicUser;
 };
 
@@ -48,7 +48,7 @@ export class AuthService {
 
   private buildAuthResult(user: Usuario): AuthResult {
     return {
-      [AUTH_COOKIE_NAME]: this.signToken(user),
+      [AUTH_ACCESS_TOKEN_FIELD]: this.signToken(user),
       user: this.buildPublicUser(user),
     };
   }

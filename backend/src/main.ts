@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { PrismaExceptionFilter } from '@/common/filters/prisma-exception.filter';
 import { GlobalExceptionFilter } from '@/common/filters/global-exception.filter';
@@ -70,11 +69,9 @@ async function bootstrap() {
       // Sem os headers de CORS, o browser bloqueia a resposta naturalmente.
       callback(null, false);
     },
-    credentials: true, // CRÍTICO: Permite envio de cookies
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   });
-
-  app.use(cookieParser());
 
   // Filtros globais: primeiro tratamos erros específicos do Prisma, depois o filtro genérico
   app.useGlobalFilters(
@@ -87,7 +84,6 @@ async function bootstrap() {
     .setDescription('Documentação de API para a aplicação Study Helper')
     .setVersion('1.0')
     .addBearerAuth()
-    .addCookieAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

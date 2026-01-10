@@ -1,5 +1,13 @@
 import { PrismaExceptionFilter } from './prisma-exception.filter';
 import { ArgumentsHost } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+
+type MockResponse = {
+  status: jest.Mock<MockResponse, [number]>;
+  json: jest.Mock<MockResponse, [unknown]>;
+};
+
+type MockRequest = { url: string };
 
 describe('PrismaExceptionFilter', () => {
   let filter: PrismaExceptionFilter;
@@ -9,19 +17,26 @@ describe('PrismaExceptionFilter', () => {
   });
 
   function mockHost() {
-    const status = jest.fn().mockReturnThis();
-    const json = jest.fn().mockReturnThis();
-    const res = { status, json };
-    const req = { url: '/test' };
+    const res = {
+      status: jest.fn<MockResponse, [number]>(),
+      json: jest.fn<MockResponse, [unknown]>(),
+    } as MockResponse;
+    res.status.mockReturnValue(res);
+    res.json.mockReturnValue(res);
+
+    const req: MockRequest = { url: '/test' };
     const host = {
       switchToHttp: () => ({ getResponse: () => res, getRequest: () => req }),
     } as unknown as ArgumentsHost;
-    return { host, status, json, req };
+    return { host, status: res.status, json: res.json, req };
   }
 
   it('should return 503 for ETIMEDOUT', () => {
     const { host, status, json, req } = mockHost();
-    const err = { code: 'ETIMEDOUT', meta: { modelName: 'Usuario' } } as any;
+    const err = {
+      code: 'ETIMEDOUT',
+      meta: { modelName: 'Usuario' },
+    } as unknown as Prisma.PrismaClientKnownRequestError;
 
     filter.catch(err, host);
 
@@ -31,18 +46,22 @@ describe('PrismaExceptionFilter', () => {
     );
   });
 
-  it('should return 409 for P2002', () => {
+  it('should return 400 for P2002', () => {
     const { host, status, json, req } = mockHost();
     const err = {
       code: 'P2002',
       meta: { constraint: { fields: ['email'] } },
-    } as any;
+    } as unknown as Prisma.PrismaClientKnownRequestError;
 
     filter.catch(err, host);
 
-    expect(status).toHaveBeenCalledWith(409);
+    expect(status).toHaveBeenCalledWith(400);
     expect(json).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 409, path: req.url }),
+      expect.objectContaining({
+        statusCode: 400,
+        path: req.url,
+        fields: ['email'],
+      }),
     );
   });
 });

@@ -5,15 +5,13 @@ import {
   Body,
   Patch,
   Get,
-  Res,
   Req,
 } from '@nestjs/common';
 import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { LocalAuthGuard } from '../guards/local-auth.guard';
 import { UsersService } from '@/users/users.service';
-import { Response, Request } from 'express';
-import { AUTH_COOKIE_NAME } from '../auth.constants';
+import { Request } from 'express';
 import { CreateUserDto } from '../dtos/create-user.dto';
 import { LoginRequestDto } from '../dtos/login-request.dto';
 import { ChangeUserPasswordDto } from '../dtos/change-user-password.dto';
@@ -25,7 +23,6 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiConflictResponse,
-  ApiCookieAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -39,11 +36,6 @@ import {
 } from '../dtos/auth-response.dto';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { OfensivaService } from '@/ofensiva/ofensiva.service';
-
-type CookieCapableResponse = Response & {
-  cookie?: (name: string, val: string, options?: any) => void;
-  clearCookie?: (name: string, options?: any) => void;
-};
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -59,80 +51,11 @@ export class AuthController {
     return this.googleCalendar.getBackendStatus();
   }
 
-  private getOriginFromReq(req?: Request): string | undefined {
-    if (!req) return undefined;
-    if (typeof req.get === 'function') return req.get('origin');
-    const h = req.headers as Record<string, any> | undefined;
-    if (!h) return undefined;
-    return (h.origin as string) || (h['origin'] as string) || undefined;
-  }
-
-  // Dominio de cookie pode ser configurado via env var para suportar subdomínios
-  private getCookieOptions(origin?: string) {
-    const rawSameSite = (process.env.COOKIE_SAMESITE ?? '')
-      .trim()
-      .toLowerCase();
-    const sameSite: 'none' | 'lax' | 'strict' =
-      rawSameSite === 'none' ||
-      rawSameSite === 'lax' ||
-      rawSameSite === 'strict'
-        ? (rawSameSite as any)
-        : process.env.NODE_ENV === 'production'
-          ? 'none'
-          : 'lax';
-
-    const rawSecure = (process.env.COOKIE_SECURE ?? '').trim().toLowerCase();
-    const secure: boolean =
-      rawSecure === 'true'
-        ? true
-        : rawSecure === 'false'
-          ? false
-          : process.env.NODE_ENV === 'production';
-
-    const expiresDays = Number(process.env.COOKIE_EXPIRES_DAYS ?? 7);
-    const expiresMs = Number.isFinite(expiresDays)
-      ? expiresDays * 24 * 60 * 60 * 1000
-      : 7 * 24 * 60 * 60 * 1000;
-
-    const base: any = {
-      httpOnly: true,
-      secure,
-      sameSite,
-      path: '/',
-      expires: new Date(Date.now() + expiresMs),
-    };
-
-    // Opcional: domínio explícito (apenas se você controla o domínio pai).
-    if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.length > 0) {
-      base.domain = process.env.COOKIE_DOMAIN;
-    }
-
-    // origin não é usado diretamente aqui; mantemos a assinatura pra compat.
-    void origin;
-    return base;
-  }
-
-  private getClearCookieOptions(origin?: string) {
-    const opts = this.getCookieOptions(origin);
-    // Para clearCookie, não precisamos forçar expires futuro.
-    delete (opts as any).expires;
-    return opts;
-  }
-
-  private setCookie(res: Response, token: string, origin?: string) {
-    const cookieOptions = this.getCookieOptions(origin);
-
-    const cookieRes = res as CookieCapableResponse;
-    if (cookieRes && typeof cookieRes.cookie === 'function') {
-      cookieRes.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
-    }
-  }
-
   @UseGuards(LocalAuthGuard)
   @ApiOperation({
     summary: 'Autenticar usuário',
     description:
-      'Valida as credenciais informadas, emite um token JWT e registra o cookie httpOnly para sessões subsequentes.\n\nBody (JSON):\n- email (string): email cadastrado\n- senha (string): senha do usuário (mín. 6; regra forte é validada no cadastro)',
+      'Valida as credenciais informadas e emite um token JWT.\n\nBody (JSON):\n- email (string): email cadastrado\n- senha (string): senha do usuário (mín. 6; regra forte é validada no cadastro)',
   })
   @ApiBody({
     type: LoginRequestDto,
@@ -151,15 +74,8 @@ export class AuthController {
     description: 'Falha de validação nos campos informados.',
   })
   @Post('login')
-  login(
-    @Body() body: LoginRequestDto,
-    @Req() req: LoginRequest,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  login(@Body() body: LoginRequestDto, @Req() req: LoginRequest) {
     const authResult = this.authService.loginFromGuard(req.user);
-    const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = this.getOriginFromReq(req);
-    this.setCookie(res, token, origin);
 
     // Cleanup pós-login: se o usuário revogou acesso no Google, desfaz a integração no banco.
     void this.googleCalendar.verifyAccessAndCleanupIfRevoked(req.user.id);
@@ -177,47 +93,21 @@ export class AuthController {
   @ApiOperation({
     summary: 'Encerrar sessão atual',
     description:
-      'Remove o cookie de autenticação do cliente. Pode ser chamado mesmo sem autenticação ativa.',
+      'Token-only: o logout é responsabilidade do cliente (ex.: limpar o token do localStorage).',
   })
-  @ApiCookieAuth()
   @ApiOkResponse({
-    description: 'Cookie removido com sucesso e sessão invalidada.',
+    description: 'Sessão encerrada no cliente com sucesso.',
     type: LogoutResponseDto,
   })
   @Post('logout')
-  logout(
-    @Req() reqOrRes: Request | Response,
-    @Res({ passthrough: true }) res?: Response,
-  ) {
-    const actualRes: Response | undefined =
-      res ?? (reqOrRes as unknown as Response);
-    const actualReq: Request | undefined = res
-      ? (reqOrRes as Request)
-      : undefined;
-
-    const origin = this.getOriginFromReq(actualReq);
-    const clearableRes = actualRes as CookieCapableResponse;
-    if (clearableRes && typeof clearableRes.clearCookie === 'function') {
-      if (!actualReq) {
-        // Quando não há req (casos de teste), ainda tenta limpar com as opções configuradas
-        clearableRes.clearCookie(
-          AUTH_COOKIE_NAME,
-          this.getClearCookieOptions(),
-        );
-      } else {
-        clearableRes.clearCookie(
-          AUTH_COOKIE_NAME,
-          this.getClearCookieOptions(origin),
-        );
-      }
-    }
+  logout() {
     return { message: 'Logout realizado com sucesso' };
   }
 
   @ApiOperation({
     summary: 'Registrar novo usuário',
     description:
-      'Cria uma conta, gera o token JWT inicial e já devolve o cookie de sessão configurado.\n\nBody (JSON):\n- nome (string)\n- email (string)\n- senha (string): forte (mín. 6, com maiúsculas/minúsculas/números/símbolos)',
+      'Cria uma conta e gera o token JWT inicial.\n\nBody (JSON):\n- nome (string)\n- email (string)\n- senha (string): forte (mín. 6, com maiúsculas/minúsculas/números/símbolos)',
   })
   @ApiBody({
     type: CreateUserDto,
@@ -235,29 +125,12 @@ export class AuthController {
     description: 'Email informado já está em uso.',
   })
   @Post('register')
-  async register(
-    @Body() body: CreateUserDto,
-    @Req() reqOrRes: Request | Response,
-    @Res({ passthrough: true }) res?: Response,
-  ) {
-    // Accept either (body, req, res) or (body, res) as tests call
-    const actualRes: Response | undefined =
-      res ?? (reqOrRes as unknown as Response);
-    const actualReq: Request | undefined = res
-      ? (reqOrRes as Request)
-      : undefined;
-
+  async register(@Body() body: CreateUserDto) {
     const authResult = await this.authService.register(body);
 
     // Novo usuário começa com ofensiva zerada.
     const ofensiva = this.ofensivaService.fromUsuario(authResult.user);
 
-    const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = this.getOriginFromReq(actualReq);
-    if (actualRes) {
-      // Use setCookie para manter opções consistentes (inclui dominio quando configurado)
-      this.setCookie(actualRes, token, origin);
-    }
     return {
       message: 'Usuário registrado com sucesso',
       ...authResult,
@@ -270,10 +143,9 @@ export class AuthController {
   @ApiOperation({
     summary: 'Recuperar perfil autenticado',
     description:
-      'Retorna dados essenciais do usuário autenticado usando o token presente no cookie ou no header Authorization.',
+      'Retorna dados essenciais do usuário autenticado usando o token presente no header Authorization (Bearer).',
   })
   @ApiBearerAuth()
-  @ApiCookieAuth()
   @ApiOkResponse({
     description: 'Perfil recuperado com sucesso.',
     type: AuthProfileResponseDto,
@@ -302,18 +174,6 @@ export class AuthController {
     return payload;
   }
 
-  /**
-   * Endpoint de utilitário para debug: verifica se o cookie de autenticação
-   * está presente no request. NÃO retorna o token, apenas um boolean.
-   * Útil para o frontend diagnosticar problemas de envio/aceitação de cookies.
-   */
-  @Get('cookie-check')
-  cookieCheck(@Req() req: Request) {
-    const cookies = (req as any)?.cookies as Record<string, string> | undefined;
-    const has = Boolean(cookies && cookies[AUTH_COOKIE_NAME]);
-    return { hasCookie: has };
-  }
-
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Trocar senha do usuário',
@@ -321,7 +181,6 @@ export class AuthController {
       'Valida a senha atual, atualiza a senha e rota o token do usuário, retornando o novo JWT.\n\nBody (JSON):\n- senhaAntiga (string)\n- novaSenha (string): forte (mín. 6, com maiúsculas/minúsculas/números/símbolos)',
   })
   @ApiBearerAuth()
-  @ApiCookieAuth()
   @ApiBody({
     type: ChangeUserPasswordDto,
     description: 'Campos do body (JSON):\n- senhaAntiga\n- novaSenha',
@@ -341,7 +200,6 @@ export class AuthController {
   async changePassword(
     @Req() req: AuthenticatedRequest,
     @Body() body: ChangeUserPasswordDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const updated = await this.usersService.changePassword(
       req.user.id,
@@ -349,9 +207,6 @@ export class AuthController {
       body.novaSenha,
     );
     const authResult = this.authService.loginFromGuard(updated);
-    const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = this.getOriginFromReq(req);
-    this.setCookie(res, token, origin);
     return {
       message: 'Senha alterada com sucesso',
       ...authResult,
@@ -366,7 +221,6 @@ export class AuthController {
       'Valida a senha atual, garante unicidade do novo email e devolve um novo token JWT atualizado.\n\nBody (JSON):\n- senha (string)\n- novoEmail (string)',
   })
   @ApiBearerAuth()
-  @ApiCookieAuth()
   @ApiBody({
     type: ChangeUserEmailDto,
     description: 'Campos do body (JSON):\n- senha\n- novoEmail',
@@ -385,7 +239,6 @@ export class AuthController {
   async changeEmail(
     @Req() req: AuthenticatedRequest,
     @Body() body: ChangeUserEmailDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const updated = await this.usersService.changeEmail(
       req.user.id,
@@ -393,9 +246,6 @@ export class AuthController {
       body.senha,
     );
     const authResult = this.authService.loginFromGuard(updated);
-    const token = authResult[AUTH_COOKIE_NAME] as string;
-    const origin = this.getOriginFromReq(req);
-    this.setCookie(res, token, origin);
     return {
       message: 'Email alterado com sucesso',
       ...authResult,
