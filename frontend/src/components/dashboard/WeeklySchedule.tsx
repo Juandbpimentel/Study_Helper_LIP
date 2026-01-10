@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { format, addDays, isSameDay, startOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, Edit2 } from "lucide-react";
+import { SlotCronograma, TemaDeEstudo } from "@/types/types";
 
 const isHex = (color: string) => color.startsWith("#");
 
@@ -40,36 +42,74 @@ const SubjectBadge = ({ name, color }: { name: string; color: string }) => {
   );
 };
 
-interface ScheduleItem {
+
+interface FormattedScheduleItem {
   day: number;
   subjects: { name: string; color: string }[];
 }
 
+interface WeeklyScheduleProps {
+  schedule?: SlotCronograma[];
+  subjects?: TemaDeEstudo[];
+
+  scheduleData?: FormattedScheduleItem[];
+
+  onEdit?: () => void;
+}
+
 export function WeeklySchedule({
+  schedule = [],
+  subjects = [],
   scheduleData,
-}: {
-  scheduleData: ScheduleItem[];
-}) {
+  onEdit,
+}: WeeklyScheduleProps) {
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  const finalSchedule = useMemo(() => {
+    if (scheduleData) return scheduleData;
+
+    return Array.from({ length: 7 }).map((_, dayIndex) => {
+      const daySlots = schedule
+        .filter((s) => s.dia_semana === dayIndex)
+        .sort((a, b) => a.ordem - b.ordem);
+
+      return {
+        day: dayIndex,
+        subjects: daySlots.map((slot) => ({
+          name: slot.tema?.tema || "Sem nome",
+          color: slot.tema?.cor || "gray",
+        })),
+      };
+    });
+  }, [schedule, scheduleData]);
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <CalendarIcon className="w-5 h-5 text-indigo-600" />
+          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+            <CalendarIcon className="w-5 h-5" />
+          </div>
           <h2 className="font-semibold text-slate-800">Cronograma Semanal</h2>
         </div>
-        <button className="text-sm text-slate-500 hover:text-indigo-600 px-3 py-1 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
-          Editar
-        </button>
+
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            Editar
+          </button>
+        )}
       </div>
-      
+
       <div className="overflow-x-auto pb-2">
         <div className="grid grid-cols-7 gap-2 min-w-[800px]">
           {weekDays.map((day, idx) => {
-            const daySchedule = scheduleData.find((s) => s.day === idx);
+            const daySchedule = finalSchedule.find((s) => s.day === idx);
             const isCurrentDay = isSameDay(day, today);
 
             return (

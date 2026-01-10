@@ -1,6 +1,3 @@
-// src/components/ui/SubjectBadge.tsx
-import React from "react";
-
 interface SubjectBadgeProps {
   name: string;
   color: string;

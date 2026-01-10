@@ -22,12 +22,11 @@ import { ptBR } from "date-fns/locale";
 import { useAppContext } from "@/context/app-context";
 import { authService, Usuario } from "@/lib/auth";
 
-import {
-  dashboardService,
-  Revisao,
-  SlotCronograma,
-  RegistroEstudo,
-} from "@/services/dashboard-service";
+// 1. IMPORTAÇÃO DOS TIPOS CENTRAIS
+import { Revisao, SlotCronograma, RegistroEstudo } from "@/types/types";
+
+// 2. IMPORTAÇÃO DO SERVIÇO AGREGADOR
+import { dashboardService } from "@/services/dashboard-service";
 
 import { StatCard } from "@/components/ui/StatCard";
 import { WeeklySchedule } from "@/components/dashboard/WeeklySchedule";
@@ -42,12 +41,14 @@ export default function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState("");
 
+  // 3. USO DOS TIPOS CORRETOS
   const [reviews, setReviews] = useState<Revisao[]>([]);
   const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
   const [records, setRecords] = useState<RegistroEstudo[]>([]);
 
   const loadDashboardData = useCallback(async () => {
     try {
+      // O dashboardService agora usa internamente os services específicos
       const data = await dashboardService.getDashboardData();
       setReviews(data.reviews);
       setSchedule(data.schedule);
@@ -118,6 +119,9 @@ export default function DashboardPage() {
     return date >= weekAgo;
   }).length;
 
+  // Prepara dados para o componente WeeklySchedule
+  // Nota: O componente WeeklySchedule agora aceita 'schedule' bruto se quiser,
+  // mas como já estamos formatando aqui para 'scheduleData', mantemos assim.
   const scheduleData = Array.from({ length: 7 }).map((_, dayIndex) => {
     const slots = schedule.filter((s) => s.dia_semana === dayIndex);
     return {
@@ -171,28 +175,28 @@ export default function DashboardPage() {
             value={pendingReviews.length}
             subtitle="para hoje"
             icon={AlertCircle}
-            colorClass="bg-orange-500 text-orange-600"
+            colorClass="bg-orange-200 text-orange-600"
           />
           <StatCard
             title="Revisões Concluídas"
             value={completedTodayCount}
             subtitle="hoje"
             icon={CheckCircle2}
-            colorClass="bg-emerald-500 text-emerald-600"
+            colorClass="bg-emerald-200 text-emerald-600"
           />
           <StatCard
             title="Tempo de Estudo"
             value={`${hours}h ${minutes}m`}
             subtitle="hoje"
             icon={Clock}
-            colorClass="bg-blue-500 text-blue-600"
+            colorClass="bg-blue-200 text-blue-600"
           />
           <StatCard
             title="Estudos Realizados"
             value={lastWeekStudiesCount}
             subtitle="últimos 7 dias"
             icon={TrendingUp}
-            colorClass="bg-purple-500 text-purple-600"
+            colorClass="bg-purple-200 text-purple-600"
           />
         </div>
 
@@ -207,8 +211,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-6">
-            <RecentStudies studies={recentStudiesData} />
-
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
               <div className="flex items-center gap-2 mb-6">
                 <RotateCcw className="w-5 h-5 text-indigo-600" />
@@ -222,6 +224,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
+            <RecentStudies studies={recentStudiesData} />
           </div>
         </div>
 
