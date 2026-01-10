@@ -1,13 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 
-// const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-const isLocal =
-  typeof window !== "undefined" && window.location.hostname === "localhost";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// const isLocal =
+//   typeof window !== "undefined" && window.location.hostname === "localhost";
 
-// Se for local, aponta para "/api-proxy", senão tenta pegar a env var ou usa a URL direta(apagar dps)
-const API_URL = isLocal
-  ? "http://localhost:3000/api-proxy"
-  : process.env.NEXT_PUBLIC_API_URL || "https://study-helper-lip.onrender.com";
+// // Se for local, aponta para "/api-proxy", senão tenta pegar a env var ou usa a URL direta(apagar dps)
+// const API_URL = isLocal
+//   ? "http://localhost:3000/api-proxy"
+//   : process.env.NEXT_PUBLIC_API_URL || "https://study-helper-lip.onrender.com";
 
 interface ApiResponse<T = unknown> {
   data?: T;
