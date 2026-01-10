@@ -24,7 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      setIsCheckingAuth(false);
+      // schedule async update to avoid calling setState synchronously inside the effect
+      const id = setTimeout(() => setIsCheckingAuth(false), 0);
+      return () => clearTimeout(id);
     } else {
       const timer = setTimeout(() => setIsCheckingAuth(false), 500);
       return () => clearTimeout(timer);

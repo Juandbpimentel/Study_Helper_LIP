@@ -11,13 +11,15 @@ import {
 // Isso permite que o page.tsx faça: import { Revisao } from "@/services/dashboard-service"
 export type { Revisao, SlotCronograma, RegistroEstudo, TemaDeEstudo };
 
-export interface Theme extends TemaDeEstudo {}
+export type Theme = TemaDeEstudo
 
 export interface DashboardData {
   reviews: Revisao[];
   schedule: SlotCronograma[];
   studyRecords: RegistroEstudo[];
 }
+
+type CronogramaResponse = SlotCronograma[] | { slots: SlotCronograma[] };
 
 export interface CreateStudyData {
   tema_id: number;
@@ -33,7 +35,7 @@ export const dashboardService = {
     try {
       const [reviewsRes, scheduleRes, recordsRes] = await Promise.all([
         api.get<Revisao[]>("/revisoes"),
-        api.get<any>("/cronograma"),
+        api.get<CronogramaResponse>("/cronograma"),
         api.get<RegistroEstudo[]>("/registros"),
       ]);
 
@@ -41,7 +43,7 @@ export const dashboardService = {
         reviews: reviewsRes.data || [],
         schedule: Array.isArray(scheduleRes.data)
           ? scheduleRes.data
-          : (scheduleRes.data as any)?.slots || [],
+          : scheduleRes.data?.slots ?? [],
         studyRecords: recordsRes.data || [],
       };
     } catch (error) {

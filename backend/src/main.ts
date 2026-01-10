@@ -32,12 +32,12 @@ async function bootstrap() {
   const tempAllowedOrigins: string[] = [];
   tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
   tempAllowedOrigins.push(process.env.PUBLIC_API_URL || '');
-  if (process.env.NODE_ENV === 'development') {
-    tempAllowedOrigins.push('http://localhost:3000');
-    tempAllowedOrigins.push(`http://localhost:${port}`);
-    tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
-    tempAllowedOrigins.push('https://hoppscotch.io');
-  }
+  // Dev ergonomics: permitir localhost e ferramentas de teste.
+  // Útil inclusive quando a API roda em docker com NODE_ENV=production.
+  tempAllowedOrigins.push('http://localhost:3000');
+  tempAllowedOrigins.push(`http://localhost:${port}`);
+  tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
+  tempAllowedOrigins.push('https://hoppscotch.io');
 
   const allowedOrigins = Array.from(
     new Set(
@@ -71,6 +71,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
   });
 
   // Filtros globais: primeiro tratamos erros específicos do Prisma, depois o filtro genérico

@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { clearAccessToken, setAccessToken } from "./token";
 
 export type DiaSemana = "Dom" | "Seg" | "Ter" | "Qua" | "Qui" | "Sex" | "Sab";
 
@@ -39,6 +40,14 @@ export interface UpdateProfileData {
   planejamentoRevisoes: number[];
 }
 
+type AuthSuccessResponse = {
+  message: string;
+  access_token: string;
+  user: Usuario;
+  // Campos adicionais vindos do backend (ex.: ofensiva/googleCalendar)
+  [key: string]: unknown;
+};
+
 const mapDiaSemanaLabel: Record<string, DiaSemana> = {
   Domingo: "Dom",
   Segunda: "Seg",
@@ -58,19 +67,32 @@ export function toDiaSemana(value: string): DiaSemana | null {
 }
 
 export const authService = {
-  // Login - O cookie é definido automaticamente pelo backend
+  // Login - token-only: salva access_token no localStorage
   async login(credentials: LoginCredentials) {
-    return api.post<{ message: string }>("/auth/login", credentials);
+    const result = await api.post<AuthSuccessResponse>(
+      "/auth/login",
+      credentials
+    );
+    if (result.data?.access_token) {
+      setAccessToken(result.data.access_token);
+    }
+    return result;
   },
 
-  // Logout - Remove o cookie
+  // Logout - token-only: limpa o token local
   async logout() {
-    return api.post<{ message: string }>("/auth/logout");
+    const result = await api.post<{ message: string }>("/auth/logout");
+    clearAccessToken();
+    return result;
   },
 
   // Registro
   async register(data: RegisterData) {
-    return api.post<Usuario>("/auth/register", data);
+    const result = await api.post<AuthSuccessResponse>("/auth/register", data);
+    if (result.data?.access_token) {
+      setAccessToken(result.data.access_token);
+    }
+    return result;
   },
 
   // Buscar perfil do usuário logado (usa o cookie automaticamente)
@@ -82,18 +104,29 @@ export const authService = {
 
   // Trocar senha - Retorna novo cookie automaticamente
   async changePassword(data: ChangePasswordData) {
-    return api.patch<{ message: string }>("/auth/change-password", {
-      senhaAntiga: data.senhaAtual,
-      novaSenha: data.novaSenha,
-    });
+    const result = await api.patch<AuthSuccessResponse>(
+      "/auth/change-password",
+      {
+        senhaAntiga: data.senhaAtual,
+        novaSenha: data.novaSenha,
+      }
+    );
+    if (result.data?.access_token) {
+      setAccessToken(result.data.access_token);
+    }
+    return result;
   },
 
   // Trocar email - Retorna novo cookie automaticamente
   async changeEmail(data: ChangeEmailData) {
-    return api.patch<{ message: string }>("/auth/change-email", {
+    const result = await api.patch<AuthSuccessResponse>("/auth/change-email", {
       novoEmail: data.novoEmail,
       senha: data.senha,
     });
+    if (result.data?.access_token) {
+      setAccessToken(result.data.access_token);
+    }
+    return result;
   },
 };
 
