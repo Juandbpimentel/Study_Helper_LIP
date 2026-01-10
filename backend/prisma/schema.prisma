@@ -139,6 +139,8 @@ model RegistroEstudo {
   revisoesGeradas  RevisaoProgramada[] @relation("RegistroOrigem")
   revisaoConcluida RevisaoProgramada?  @relation("RegistroConclusao")
 
+  anotacoes         String? @db.VarChar(2000)
+
   usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   creatorId Int
 

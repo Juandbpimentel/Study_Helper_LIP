@@ -37,6 +37,14 @@ export class CreateRegistroDto {
   conteudoEstudado?: string;
 
   @ApiPropertyOptional({
+    description: 'Anotações adicionais sobre o registro (até 2000 caracteres)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  anotacoes?: string;
+
+  @ApiPropertyOptional({
     description: 'Identificador do tema vinculado ao registro',
   })
   @IsOptional()

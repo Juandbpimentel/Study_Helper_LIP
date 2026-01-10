@@ -97,6 +97,12 @@ export class RegistroEstudoBaseDto {
   })
   conteudoEstudado?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Anotações adicionais sobre o registro',
+    nullable: true,
+  })
+  anotacoes?: string | null;
+
   @ApiProperty({
     description: 'Tipo do registro',
     enum: TipoRegistro,

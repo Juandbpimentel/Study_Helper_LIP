@@ -9,3 +9,6 @@ export class RegistroCriadoResponseDto extends RegistroEstudoComDetalhesDto {}
 
 @ApiExtraModels(RegistroEstudoComDetalhesDto, RegistroEstudoCompletoDto)
 export class RegistroListagemItemDto extends RegistroEstudoCompletoDto {}
+
+@ApiExtraModels(RegistroEstudoComDetalhesDto, RegistroEstudoCompletoDto)
+export class RegistroFindByIdResponseDto extends RegistroEstudoCompletoDto {}

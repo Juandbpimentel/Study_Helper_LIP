@@ -32,6 +32,7 @@ import {
 } from '@nestjs/swagger';
 import {
   RegistroCriadoResponseDto,
+  RegistroFindByIdResponseDto,
   RegistroListagemItemDto,
 } from './dto/registro-response.dto';
 
@@ -80,6 +81,34 @@ export class RegistrosController {
     @Query() query: ListRegistrosQueryDto,
   ) {
     return this.registrosService.listar(req.user.id, query);
+  }
+
+  @ApiOperation({
+    summary: 'Buscar registro por ID',
+    description:
+      'Retorna um registro específico do usuário autenticado pelo seu ID.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador do registro',
+    example: 1,
+  })
+  @ApiOkResponse({
+    description: 'Registro encontrado com sucesso.',
+    type: RegistroFindByIdResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Registro não encontrado para o usuário autenticado.',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token ausente ou inválido.',
+  })
+  @Get(':id')
+  buscarPorId(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.registrosService.buscarPorId(req.user.id, id);
   }
 
   @ApiOperation({

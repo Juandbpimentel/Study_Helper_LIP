@@ -85,6 +85,26 @@ export class RegistrosService {
     };
   }
 
+  async buscarPorId(usuarioId: number, registroId: number) {
+    const registro = await this.prisma.registroEstudo.findFirst({
+      where: { id: registroId, creatorId: usuarioId },
+      include: {
+        tema: true,
+        slotCronograma: {
+          include: { tema: true },
+        },
+        revisoesGeradas: true,
+        revisaoConcluida: true,
+      },
+    });
+    if (!registro) {
+      throw new NotFoundException(
+        'Registro de estudo não encontrado para o usuário',
+      );
+    }
+    return registro;
+  }
+
   async criar(usuarioId: number, dto: CreateRegistroDto) {
     const { registro, revisoesCriadasIds } = await this.prisma.$transaction(
       async (tx) => this.criarComTx(tx, usuarioId, dto),
@@ -203,6 +223,7 @@ export class RegistrosService {
         temaId: temaIdFinal ?? null,
         slotId: slot?.id ?? null,
         creatorId: usuarioId,
+        anotacoes: dto.anotacoes?.trim() ?? null,
       },
       include: {
         tema: true,
