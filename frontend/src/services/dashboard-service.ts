@@ -1,70 +1,25 @@
-import { api } from "@/lib/api";
-// Importamos os tipos centrais
-import {
-  Revisao,
-  SlotCronograma,
-  RegistroEstudo,
-  TemaDeEstudo,
-} from "@/types/types"; // Certifique-se que o caminho está correto (types.ts ou index.ts)
-
-// --- CORREÇÃO: RE-EXPORTAR OS TIPOS ---
-// Isso permite que o page.tsx faça: import { Revisao } from "@/services/dashboard-service"
-export type { Revisao, SlotCronograma, RegistroEstudo, TemaDeEstudo };
-
-export type Theme = TemaDeEstudo
-
-export interface DashboardData {
-  reviews: Revisao[];
-  schedule: SlotCronograma[];
-  studyRecords: RegistroEstudo[];
-}
-
-type CronogramaResponse = SlotCronograma[] | { slots: SlotCronograma[] };
-
-export interface CreateStudyData {
-  tema_id: number;
-  conteudo_estudado: string;
-  data_estudo: string;
-  tempo_dedicado: number;
-  anotacoes?: string;
-}
+import { DashboardData } from "@/types/types";
+import { reviewService } from "./review-service";
+import { scheduleService } from "./schedule-service";
+import { studyService } from "./study-service";
 
 export const dashboardService = {
-  // Busca todos os dados necessários em paralelo
-  async getDashboardData() {
+  async getDashboardData(): Promise<DashboardData> {
     try {
-      const [reviewsRes, scheduleRes, recordsRes] = await Promise.all([
-        api.get<Revisao[]>("/revisoes"),
-        api.get<CronogramaResponse>("/cronograma"),
-        api.get<RegistroEstudo[]>("/registros"),
+      const [reviews, schedule, studyRecords] = await Promise.all([
+        reviewService.getAll().then((res) => res.data),
+        scheduleService.get(),
+        studyService.getAll().then((res) => res.data),
       ]);
 
       return {
-        reviews: reviewsRes.data || [],
-        schedule: Array.isArray(scheduleRes.data)
-          ? scheduleRes.data
-          : scheduleRes.data?.slots ?? [],
-        studyRecords: recordsRes.data || [],
+        reviews: reviews || [],
+        schedule: schedule || [],
+        studyRecords: studyRecords || [],
       };
     } catch (error) {
-      console.error("Erro ao carregar dashboard:", error);
+      console.error("Erro ao carregar dados do dashboard:", error);
       return { reviews: [], schedule: [], studyRecords: [] };
     }
-  },
-
-  async completeReview(id: number) {
-    return api.patch(`/revisoes/${id}/concluir`);
-  },
-
-  async getThemes() {
-    return api.get<TemaDeEstudo[]>("/themes");
-  },
-
-  async createStudyRecord(data: CreateStudyData) {
-    return api.post("/registros", data);
-  },
-
-  async createTheme(data: { tema: string; cor: string; descricao?: string }) {
-    return api.post<Theme>("/themes", data);
   },
 };

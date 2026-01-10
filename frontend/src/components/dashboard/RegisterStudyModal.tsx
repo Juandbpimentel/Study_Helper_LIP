@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { X, BookOpen, Save, Loader2, Palette } from "lucide-react";
-import { dashboardService, Theme } from "@/services/dashboard-service";
+
+import { TemaDeEstudo } from "@/types/types";
+import { subjectService } from "@/services/subject-service";
+import { studyService } from "@/services/study-service";
 
 interface RegisterStudyModalProps {
   isOpen: boolean;
@@ -13,7 +16,7 @@ export function RegisterStudyModal({
   onClose,
   onSuccess,
 }: RegisterStudyModalProps) {
-  const [themes, setThemes] = useState<Theme[]>([]);
+  const [themes, setThemes] = useState<TemaDeEstudo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,11 +43,12 @@ export function RegisterStudyModal({
 
   const loadThemes = () => {
     setIsLoading(true);
-    dashboardService
-      .getThemes()
+    subjectService
+      .getAll()
       .then((res) => {
         if (res.data) setThemes(res.data);
       })
+      .catch((err) => console.error("Erro ao carregar temas", err))
       .finally(() => setIsLoading(false));
   };
 
@@ -59,7 +63,7 @@ export function RegisterStudyModal({
       let finalTemaId = formData.tema_id;
 
       if (isCreatingTheme) {
-        const themeRes = await dashboardService.createTheme({
+        const themeRes = await subjectService.create({
           tema: newThemeData.tema,
           cor: newThemeData.cor,
           descricao: newThemeData.descricao,
@@ -72,12 +76,17 @@ export function RegisterStudyModal({
         }
       }
 
-      await dashboardService.createStudyRecord({
+      await studyService.create({
         tema_id: parseInt(finalTemaId),
         conteudo_estudado: formData.conteudo_estudado,
         data_estudo: new Date(formData.data_estudo).toISOString(),
         tempo_dedicado: parseInt(formData.tempo_dedicado),
         anotacoes: formData.anotacoes,
+        id: 0,
+        tipo_registro: "",
+        creatorId: 0,
+        created_at: "",
+        updated_at: "",
       });
 
       resetForm();
@@ -169,11 +178,15 @@ export function RegisterStudyModal({
                   <option value="" disabled>
                     Selecione a disciplina
                   </option>
-                  {themes.map((theme) => (
-                    <option key={theme.id} value={theme.id}>
-                      {theme.tema}
-                    </option>
-                  ))}
+                  {isLoading ? (
+                    <option disabled>Carregando disciplinas...</option>
+                  ) : (
+                    themes.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.tema}
+                      </option>
+                    ))
+                  )}
                   <option
                     value="NEW_THEME"
                     className="font-semibold text-indigo-600 bg-indigo-50"

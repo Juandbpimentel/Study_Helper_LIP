@@ -1,8 +1,8 @@
 import { AlertCircle, BookOpen, CheckCircle2 } from "lucide-react";
 import { format, isBefore, startOfDay, parseISO } from "date-fns";
-import { Revisao, dashboardService } from "@/services/dashboard-service";
+import { Revisao } from "@/types/types";
+import { reviewService } from "@/services/review-service";
 
-// Props agora aceita a lista original de Revisões e uma função opcional de refresh
 interface ReviewListProps {
   reviews: Revisao[];
   onRefresh?: () => void;
@@ -13,8 +13,8 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
 
   const handleComplete = async (id: number) => {
     try {
-      await dashboardService.completeReview(id);
-      if (onRefresh) onRefresh(); // Recarrega o dashboard
+      await reviewService.complete(id);
+      if (onRefresh) onRefresh();
     } catch (error) {
       console.error("Erro ao concluir revisão", error);
     }
@@ -31,16 +31,9 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
 
       <div className="space-y-3">
         {reviews.map((review) => {
-          // --- LÓGICA DE DADOS DENTRO DO COMPONENTE ---
           const reviewDate = parseISO(review.data_revisao);
-
-          // Verifica se está atrasada (data < hoje)
           const isLate = isBefore(reviewDate, today);
-
-          // Formata a data (Ex: 09/01)
           const dateLabel = format(reviewDate, "dd/MM");
-
-          // Pega os dados das relações (com fallback para evitar crash)
           const topic =
             review.registro_origem?.conteudo_estudado || "Sem tópico";
           const subject = review.tema?.tema || "Geral";

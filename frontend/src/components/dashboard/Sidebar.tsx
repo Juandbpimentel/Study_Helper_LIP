@@ -28,27 +28,27 @@ export function Sidebar() {
     },
     {
       label: "Calendário",
-      href: "/dashboard/calendar",
+      href: "/calendar",
       icon: Calendar,
     },
     {
       label: "Revisões",
-      href: "/dashboard/reviews",
+      href: "/reviews",
       icon: RotateCcw,
     },
     {
       label: "Disciplinas",
-      href: "/dashboard/subjects",
+      href: "/subjects",
       icon: BookOpen,
     },
     {
       label: "Estatísticas",
-      href: "/dashboard/statistics",
+      href: "/statistics",
       icon: BarChart3,
     },
     {
       label: "Configurações",
-      href: "/dashboard/settings",
+      href: "/settings",
       icon: Settings,
     },
   ];

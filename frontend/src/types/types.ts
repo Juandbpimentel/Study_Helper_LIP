@@ -35,6 +35,7 @@ export interface RegistroEstudo {
   slot_id?: number;
   tempo_dedicado: number;
   conteudo_estudado: string;
+  anotacoes?: string;
   tipo_registro: string;
   data_estudo: string;
   creatorId: number;
@@ -49,7 +50,7 @@ export interface Revisao {
   registro_origem_id: number;
   registro_conclusao_id?: number;
   data_revisao: string;
-  status_revisao: 'PENDENTE' | 'CONCLUIDA' | 'ATRASADA' | 'ADIADA';
+  status_revisao: "PENDENTE" | "CONCLUIDA" | "ATRASADA" | "ADIADA";
   google_event_id?: string;
   creatorId: number;
   created_at: string;
@@ -91,3 +92,11 @@ export interface GoogleCalendarIntegration {
   created_at: string;
   updated_at: string;
 }
+
+export interface DashboardData {
+  reviews: Revisao[];
+  schedule: SlotCronograma[];
+  studyRecords: RegistroEstudo[];
+}
+
+export type CronogramaResponse = SlotCronograma[] | { slots: SlotCronograma[] };

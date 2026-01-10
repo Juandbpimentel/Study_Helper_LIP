@@ -1,5 +1,5 @@
 import { BookOpen } from "lucide-react";
-import { RegistroEstudo } from "@/services/dashboard-service"; 
+import { RegistroEstudo } from "@/types/types";
 
 interface RecentStudiesProps {
   studies: RegistroEstudo[];
