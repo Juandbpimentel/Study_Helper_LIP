@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
@@ -316,8 +320,25 @@ export class CronogramasService {
       where: { creatorId: usuarioId },
     });
     if (existente) return existente;
-    return await this.prisma.cronogramaSemanal.create({
-      data: { creatorId: usuarioId },
-    });
+
+    try {
+      return await this.prisma.cronogramaSemanal.create({
+        data: { creatorId: usuarioId },
+      });
+    } catch (err) {
+      if (isPrismaP2002(err)) {
+        const fields = getPrismaConstraintFields(err);
+        if (Array.isArray(fields) && fields.includes('creatorId')) {
+          const existing = await this.prisma.cronogramaSemanal.findUnique({
+            where: { creatorId: usuarioId },
+          });
+          if (existing) return existing;
+        }
+        throw new BadRequestException(
+          'Violação de unicidade no banco de dados',
+        );
+      }
+      throw err;
+    }
   }
 }

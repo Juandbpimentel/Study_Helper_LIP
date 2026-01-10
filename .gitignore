@@ -28,3 +28,7 @@ secretsEEnvsProjeto.env
 .env
 
 *.txt
+# Local env files (do not commit)
+.env.*
+!.env.example
+

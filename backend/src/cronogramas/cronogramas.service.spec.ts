@@ -112,6 +112,84 @@ describe('CronogramasService', () => {
     );
   });
 
+  it('ensureCronograma: trata P2002 e retorna cronograma existente em caso de race', async () => {
+    const cronogramaFindUnique = jest
+      .fn<
+        Promise<{ id: number; creatorId: number } | null>,
+        [Prisma.CronogramaSemanalFindUniqueArgs]
+      >()
+      .mockResolvedValueOnce(null)
+      .mockImplementation(async () => ({ id: 99, creatorId: 5 }));
+
+    const cronogramaCreate = jest
+      .fn<Promise<{ id: number }>, [Prisma.CronogramaSemanalCreateArgs]>()
+      .mockRejectedValueOnce({
+        code: 'P2002',
+        meta: { constraint: { fields: ['creatorId'] } },
+      });
+
+    const usuarioFindUnique = jest
+      .fn<
+        Promise<{ maxSlotsPorDia: number | null } | null>,
+        [Prisma.UsuarioFindUniqueArgs]
+      >()
+      .mockResolvedValue({
+        primeiroDiaSemana: 'Dom' as any,
+        slotAtrasoToleranciaDias: 0,
+        slotAtrasoMaxDias: 7,
+        maxSlotsPorDia: null,
+      });
+
+    const txSlotFindMany = jest.fn().mockResolvedValue([]);
+    const txSlotUpdate = jest.fn().mockResolvedValue({});
+    const txSlotCreate = jest.fn().mockResolvedValue({});
+    const txSlotDeleteMany = jest.fn().mockResolvedValue({});
+
+    const prisma = {
+      cronogramaSemanal: {
+        findUnique: cronogramaFindUnique,
+        create: cronogramaCreate,
+      },
+      usuario: { findUnique: usuarioFindUnique },
+      slotCronograma: { findMany: jest.fn().mockResolvedValue([]) },
+      registroEstudo: { findMany: jest.fn().mockResolvedValue([]) },
+      $Transaction: undefined,
+      $transaction: jest.fn(async (cb: any) =>
+        cb({
+          slotCronograma: {
+            findMany: txSlotFindMany,
+            update: txSlotUpdate,
+            create: txSlotCreate,
+            deleteMany: txSlotDeleteMany,
+          },
+        }),
+      ),
+    } as unknown as PrismaService;
+
+    const deleteSlotEventsByEventIds = jest.fn().mockResolvedValue(undefined);
+    const syncSlotsForUser = jest.fn().mockResolvedValue(undefined);
+
+    const googleCalendar: Pick<
+      GoogleCalendarService,
+      'deleteSlotEventsByEventIds' | 'syncSlotsForUser'
+    > = {
+      deleteSlotEventsByEventIds,
+      syncSlotsForUser,
+    };
+
+    const service = new CronogramasService(prisma, googleCalendar as any);
+
+    const dto: UpsertCronogramaDto = { slots: [] };
+
+    const result = await service.upsert(5, dto);
+
+    // Se o ensureCronograma tratou o P2002 e retornou o existente, o upsert deve prosseguir e retornar o cronograma final
+    expect(result).toBeDefined();
+    expect(cronogramaCreate).toHaveBeenCalledTimes(1);
+    // 1) initial findUnique, 2) findUnique in catch, 3) ensureCronograma called again inside obterCronogramaComStatus
+    expect(cronogramaFindUnique).toHaveBeenCalledTimes(3);
+  });
+
   it('upsert: respeita maxSlotsPorDia e lança BadRequest se exceder', async () => {
     const cronogramaFindUnique = jest
       .fn<

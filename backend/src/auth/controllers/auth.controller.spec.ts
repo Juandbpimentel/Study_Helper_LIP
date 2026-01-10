@@ -208,6 +208,25 @@ describe('AuthController', () => {
     });
   });
 
+  it('should include domain when COOKIE_DOMAIN env var is set', () => {
+    const prev = process.env.COOKIE_DOMAIN;
+    process.env.COOKIE_DOMAIN = '.example.com';
+
+    const body: LoginRequestDto = { email: user.email, senha: 'secret' };
+    const req: LoginReq = { user } as unknown as LoginReq;
+
+    controller.login(body, req, responseMock as unknown as Response);
+
+    expect(cookieMock).toHaveBeenCalledWith(
+      AUTH_COOKIE_NAME,
+      authResult[AUTH_COOKIE_NAME],
+      expect.objectContaining({ domain: '.example.com' }),
+    );
+
+    if (prev === undefined) delete process.env.COOKIE_DOMAIN;
+    else process.env.COOKIE_DOMAIN = prev;
+  });
+
   it('deve registrar e retornar token + usuário', async () => {
     const body: CreateUserDto = {
       email: user.email,
@@ -297,7 +316,22 @@ describe('AuthController', () => {
   it('deve limpar o cookie no logout', () => {
     const result = controller.logout(responseMock as unknown as Response);
 
-    expect(clearCookieMock).toHaveBeenCalledWith(AUTH_COOKIE_NAME);
+    expect(clearCookieMock).toHaveBeenCalledWith(
+      AUTH_COOKIE_NAME,
+      expect.objectContaining({ httpOnly: true, path: '/' }),
+    );
     expect(result).toEqual({ message: 'Logout realizado com sucesso' });
+  });
+
+  it('cookie-check should return whether auth cookie is present', () => {
+    const reqWithCookie = {
+      cookies: { [AUTH_COOKIE_NAME]: 'token-123' },
+    } as unknown as Request;
+    const reqWithoutCookie = { cookies: {} } as unknown as Request;
+
+    expect(controller.cookieCheck(reqWithCookie)).toEqual({ hasCookie: true });
+    expect(controller.cookieCheck(reqWithoutCookie)).toEqual({
+      hasCookie: false,
+    });
   });
 });

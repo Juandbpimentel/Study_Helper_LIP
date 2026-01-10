@@ -67,15 +67,60 @@ export class AuthController {
     return (h.origin as string) || (h['origin'] as string) || undefined;
   }
 
-  private setCookie(res: Response, token: string, origin?: string) {
-    const isCrossSite =
-      typeof origin === 'string' && !origin.includes('localhost');
-    const cookieOptions = {
+  // Dominio de cookie pode ser configurado via env var para suportar subdomínios
+  private getCookieOptions(origin?: string) {
+    const rawSameSite = (process.env.COOKIE_SAMESITE ?? '')
+      .trim()
+      .toLowerCase();
+    const sameSite: 'none' | 'lax' | 'strict' =
+      rawSameSite === 'none' ||
+      rawSameSite === 'lax' ||
+      rawSameSite === 'strict'
+        ? (rawSameSite as any)
+        : process.env.NODE_ENV === 'production'
+          ? 'none'
+          : 'lax';
+
+    const rawSecure = (process.env.COOKIE_SECURE ?? '').trim().toLowerCase();
+    const secure: boolean =
+      rawSecure === 'true'
+        ? true
+        : rawSecure === 'false'
+          ? false
+          : process.env.NODE_ENV === 'production';
+
+    const expiresDays = Number(process.env.COOKIE_EXPIRES_DAYS ?? 7);
+    const expiresMs = Number.isFinite(expiresDays)
+      ? expiresDays * 24 * 60 * 60 * 1000
+      : 7 * 24 * 60 * 60 * 1000;
+
+    const base: any = {
       httpOnly: true,
-      secure: isCrossSite,
-      sameSite: isCrossSite ? ('none' as const) : ('lax' as const),
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      secure,
+      sameSite,
+      path: '/',
+      expires: new Date(Date.now() + expiresMs),
     };
+
+    // Opcional: domínio explícito (apenas se você controla o domínio pai).
+    if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.length > 0) {
+      base.domain = process.env.COOKIE_DOMAIN;
+    }
+
+    // origin não é usado diretamente aqui; mantemos a assinatura pra compat.
+    void origin;
+    return base;
+  }
+
+  private getClearCookieOptions(origin?: string) {
+    const opts = this.getCookieOptions(origin);
+    // Para clearCookie, não precisamos forçar expires futuro.
+    delete (opts as any).expires;
+    return opts;
+  }
+
+  private setCookie(res: Response, token: string, origin?: string) {
+    const cookieOptions = this.getCookieOptions(origin);
 
     const cookieRes = res as CookieCapableResponse;
     if (cookieRes && typeof cookieRes.cookie === 'function') {
@@ -151,18 +196,19 @@ export class AuthController {
       : undefined;
 
     const origin = this.getOriginFromReq(actualReq);
-    const isCrossSite =
-      typeof origin === 'string' && !origin.includes('localhost');
     const clearableRes = actualRes as CookieCapableResponse;
     if (clearableRes && typeof clearableRes.clearCookie === 'function') {
       if (!actualReq) {
-        clearableRes.clearCookie(AUTH_COOKIE_NAME);
+        // Quando não há req (casos de teste), ainda tenta limpar com as opções configuradas
+        clearableRes.clearCookie(
+          AUTH_COOKIE_NAME,
+          this.getClearCookieOptions(),
+        );
       } else {
-        clearableRes.clearCookie(AUTH_COOKIE_NAME, {
-          httpOnly: true,
-          secure: isCrossSite,
-          sameSite: isCrossSite ? ('none' as const) : ('lax' as const),
-        });
+        clearableRes.clearCookie(
+          AUTH_COOKIE_NAME,
+          this.getClearCookieOptions(origin),
+        );
       }
     }
     return { message: 'Logout realizado com sucesso' };
@@ -209,18 +255,8 @@ export class AuthController {
     const token = authResult[AUTH_COOKIE_NAME] as string;
     const origin = this.getOriginFromReq(actualReq);
     if (actualRes) {
-      const cookieRes = actualRes as CookieCapableResponse;
-      if (typeof cookieRes.cookie === 'function') {
-        cookieRes.cookie(AUTH_COOKIE_NAME, token, {
-          httpOnly: true,
-          secure: typeof origin === 'string' && !origin.includes('localhost'),
-          sameSite:
-            typeof origin === 'string' && !origin.includes('localhost')
-              ? ('none' as const)
-              : ('lax' as const),
-          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        });
-      }
+      // Use setCookie para manter opções consistentes (inclui dominio quando configurado)
+      this.setCookie(actualRes, token, origin);
     }
     return {
       message: 'Usuário registrado com sucesso',
@@ -264,6 +300,18 @@ export class AuthController {
       ofensiva,
     };
     return payload;
+  }
+
+  /**
+   * Endpoint de utilitário para debug: verifica se o cookie de autenticação
+   * está presente no request. NÃO retorna o token, apenas um boolean.
+   * Útil para o frontend diagnosticar problemas de envio/aceitação de cookies.
+   */
+  @Get('cookie-check')
+  cookieCheck(@Req() req: Request) {
+    const cookies = (req as any)?.cookies as Record<string, string> | undefined;
+    const has = Boolean(cookies && cookies[AUTH_COOKIE_NAME]);
+    return { hasCookie: has };
   }
 
   @UseGuards(JwtAuthGuard)

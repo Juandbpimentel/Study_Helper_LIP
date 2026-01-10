@@ -4,6 +4,8 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
+import { PrismaExceptionFilter } from '@/common/filters/prisma-exception.filter';
+import { GlobalExceptionFilter } from '@/common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -73,6 +75,12 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
+
+  // Filtros globais: primeiro tratamos erros específicos do Prisma, depois o filtro genérico
+  app.useGlobalFilters(
+    new PrismaExceptionFilter(),
+    new GlobalExceptionFilter(),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Study Helper API')

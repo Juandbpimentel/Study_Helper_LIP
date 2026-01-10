@@ -83,6 +83,40 @@ describe('UsersService', () => {
     (crypto.randomUUID as jest.Mock).mockReset();
   });
 
+  describe('create', () => {
+    it('should normalize email and create user', async () => {
+      const dto = {
+        email: ' JOHN@EXAMPLE.COM ',
+        nome: 'John',
+        senha: 'hashed',
+      } as any;
+      const created: Usuario = { ...baseUser, email: 'john@example.com' };
+      prismaMock.usuario.create.mockResolvedValue(created);
+
+      const result = await service.create(dto);
+
+      expect(prismaMock.usuario.create).toHaveBeenCalledWith({
+        data: { ...dto, email: 'john@example.com' },
+      });
+      expect(result.email).toBe('john@example.com');
+    });
+
+    it('should throw ConflictException when email already in use', async () => {
+      prismaMock.usuario.create.mockRejectedValue({
+        code: 'P2002',
+        meta: { constraint: { fields: ['email'] } },
+      });
+
+      await expect(
+        service.create({
+          email: 'x@example.com',
+          nome: 'X',
+          senha: 's',
+        } as any),
+      ).rejects.toThrow('O email já está em uso');
+    });
+  });
+
   describe('changePassword', () => {
     it('should update password and rotate versaoToken on success', async () => {
       prismaMock.usuario.findUnique.mockResolvedValue(baseUser);

@@ -13,7 +13,31 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     if (!connectionString) {
       throw new Error('DATABASE_URL não definido. Verifique o .env.');
     }
-    const pool = new Pool({ connectionString });
+
+    const pool = new Pool({
+      connectionString,
+      // Valores configuráveis via env vars com defaults seguros
+      max: Number(process.env.PRISMA_POOL_MAX ?? 20),
+      connectionTimeoutMillis: Number(
+        process.env.PRISMA_CONNECTION_TIMEOUT_MS ?? 5000,
+      ),
+      idleTimeoutMillis: Number(process.env.PRISMA_IDLE_TIMEOUT_MS ?? 30000),
+    });
+
+    // Definir statement_timeout para evitar queries travadas afetando o pool
+    pool.on('connect', (client) => {
+      const stmtTimeout = Number(
+        process.env.PRISMA_STATEMENT_TIMEOUT_MS ?? 15000,
+      );
+      void client.query(`SET statement_timeout = ${stmtTimeout}`);
+    });
+
+    // Log de erro de pool (melhora diagnóstico)
+    pool.on('error', (err) => {
+      // eslint-disable-next-line no-console
+      console.error('PG Pool error:', err?.message ?? err);
+    });
+
     const adapter = new PrismaPg(pool);
     super({ errorFormat: 'minimal', adapter });
     this.pool = pool;
