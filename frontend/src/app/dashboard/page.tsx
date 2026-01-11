@@ -22,37 +22,47 @@ import { ptBR } from "date-fns/locale";
 import { useAppContext } from "@/context/app-context";
 import { authService, Usuario } from "@/lib/auth";
 
-// 1. IMPORTAÇÃO DOS TIPOS CENTRAIS
-import { Revisao, SlotCronograma, RegistroEstudo } from "@/types/types";
+import {
+  Revisao,
+  SlotCronograma,
+  RegistroEstudo,
+  TemaDeEstudo,
+} from "@/types/types";
 
-// 2. IMPORTAÇÃO DO SERVIÇO AGREGADOR
 import { dashboardService } from "@/services/dashboard-service";
+import { scheduleService } from "@/services/schedule-service";
+import { subjectService } from "@/services/subject-service";
 
 import { StatCard } from "@/components/ui/StatCard";
 import { WeeklySchedule } from "@/components/dashboard/WeeklySchedule";
 import { ReviewList } from "@/components/dashboard/ReviewList";
 import { RecentStudies } from "@/components/dashboard/RecentStudies";
 import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
+import { ScheduleEditor } from "@/components/subjects/ScheduleEditor";
 
 export default function DashboardPage() {
   const { user, setUser } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [error, setError] = useState("");
 
-  // 3. USO DOS TIPOS CORRETOS
+  const [showScheduleEditor, setShowScheduleEditor] = useState(false);
+
   const [reviews, setReviews] = useState<Revisao[]>([]);
   const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
   const [records, setRecords] = useState<RegistroEstudo[]>([]);
+  const [subjects, setSubjects] = useState<TemaDeEstudo[]>([]);
 
   const loadDashboardData = useCallback(async () => {
     try {
-      // O dashboardService agora usa internamente os services específicos
-      const data = await dashboardService.getDashboardData();
-      setReviews(data.reviews);
-      setSchedule(data.schedule);
-      setRecords(data.studyRecords);
+      const [dashboardData, themesRes] = await Promise.all([
+        dashboardService.getDashboardData(),
+        subjectService.getAll(),
+      ]);
+
+      setReviews(dashboardData.reviews);
+      setSchedule(dashboardData.schedule);
+      setRecords(dashboardData.studyRecords);
+      setSubjects(themesRes.data || []);
     } catch (err) {
       console.error("Erro ao carregar dashboard:", err);
     }
@@ -83,6 +93,20 @@ export default function DashboardPage() {
 
     init();
   }, [user, setUser, loadDashboardData]);
+
+  const handleSaveSchedule = async (
+    newScheduleMap: Record<number, number[]>
+  ) => {
+    try {
+      await scheduleService.update(newScheduleMap);
+      alert("Cronograma atualizado com sucesso!");
+      setShowScheduleEditor(false);
+      await loadDashboardData();
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao salvar cronograma.");
+    }
+  };
 
   const today = new Date();
   const todayStart = startOfDay(today);
@@ -118,20 +142,6 @@ export default function DashboardPage() {
     const weekAgo = subDays(today, 7);
     return date >= weekAgo;
   }).length;
-
-  // Prepara dados para o componente WeeklySchedule
-  // Nota: O componente WeeklySchedule agora aceita 'schedule' bruto se quiser,
-  // mas como já estamos formatando aqui para 'scheduleData', mantemos assim.
-  const scheduleData = Array.from({ length: 7 }).map((_, dayIndex) => {
-    const slots = schedule.filter((s) => s.dia_semana === dayIndex);
-    return {
-      day: dayIndex,
-      subjects: slots.map((s) => ({
-        name: s.tema?.tema || "Estudo",
-        color: s.tema?.cor || "blue",
-      })),
-    };
-  });
 
   const recentStudiesData = records
     .sort(
@@ -202,7 +212,10 @@ export default function DashboardPage() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <WeeklySchedule scheduleData={scheduleData} />
+            <WeeklySchedule
+              schedule={schedule}
+              onEdit={() => setShowScheduleEditor(true)}
+            />
 
             <ReviewList
               reviews={pendingReviews}
@@ -234,6 +247,14 @@ export default function DashboardPage() {
           onSuccess={() => {
             loadDashboardData();
           }}
+        />
+
+        <ScheduleEditor
+          isOpen={showScheduleEditor}
+          onClose={() => setShowScheduleEditor(false)}
+          subjects={subjects}
+          currentSchedule={schedule}
+          onSave={handleSaveSchedule}
         />
       </div>
     </div>

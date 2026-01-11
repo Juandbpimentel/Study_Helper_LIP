@@ -42,7 +42,6 @@ const SubjectBadge = ({ name, color }: { name: string; color: string }) => {
   );
 };
 
-
 interface FormattedScheduleItem {
   day: number;
   subjects: { name: string; color: string }[];
@@ -59,7 +58,6 @@ interface WeeklyScheduleProps {
 
 export function WeeklySchedule({
   schedule = [],
-  subjects = [],
   scheduleData,
   onEdit,
 }: WeeklyScheduleProps) {
