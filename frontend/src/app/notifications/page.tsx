@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, ComponentType } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import type { LucideIcon } from "lucide-react";
 import { Bell, AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
 import { notificationService } from "@/services/notification-service";
 import { RevisaoNotification } from "@/types/types";
@@ -13,7 +14,7 @@ const typeStyles: Record<RevisaoNotification["tipo"], string> = {
   em_breve: "border-blue-200 bg-blue-50 text-blue-800",
 };
 
-const typeIcon: Record<RevisaoNotification["tipo"], ComponentType<any>> = {
+const typeIcon: Record<RevisaoNotification["tipo"], LucideIcon> = {
   expirada: AlertTriangle,
   atrasada: AlertTriangle,
   hoje: CheckCircle2,

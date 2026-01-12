@@ -333,12 +333,26 @@ describe('CronogramasService', () => {
       .fn<Promise<unknown>, [Prisma.SlotCronogramaDeleteManyArgs]>()
       .mockResolvedValue({});
 
+    const txRevisaoUpdateMany = jest
+      .fn<Promise<unknown>, [Prisma.RevisaoProgramadaUpdateManyArgs]>()
+      .mockResolvedValue({});
+
+    const txRegistroUpdateMany = jest
+      .fn<Promise<unknown>, [Prisma.RegistroEstudoUpdateManyArgs]>()
+      .mockResolvedValue({});
+
     type TxClient = {
       slotCronograma: {
         findMany: typeof txSlotFindMany;
         update: typeof txSlotUpdate;
         create: typeof txSlotCreate;
         deleteMany: typeof txSlotDeleteMany;
+      };
+      revisaoProgramada: {
+        updateMany: typeof txRevisaoUpdateMany;
+      };
+      registroEstudo: {
+        updateMany: typeof txRegistroUpdateMany;
       };
     };
 
@@ -348,6 +362,12 @@ describe('CronogramasService', () => {
         update: txSlotUpdate,
         create: txSlotCreate,
         deleteMany: txSlotDeleteMany,
+      },
+      revisaoProgramada: {
+        updateMany: txRevisaoUpdateMany,
+      },
+      registroEstudo: {
+        updateMany: txRegistroUpdateMany,
       },
     };
 
@@ -419,6 +439,8 @@ describe('CronogramasService', () => {
     expect(txSlotUpdate).toHaveBeenCalledTimes(1);
     expect(txSlotCreate).toHaveBeenCalledTimes(1);
     expect(txSlotDeleteMany).toHaveBeenCalledTimes(1);
+    expect(txRevisaoUpdateMany).toHaveBeenCalledTimes(1);
+    expect(txRegistroUpdateMany).toHaveBeenCalledTimes(1);
 
     expect(deleteSlotEventsByEventIds).toHaveBeenCalledTimes(1);
     expect(deleteSlotEventsByEventIds).toHaveBeenCalledWith(1, ['e-remove']);

@@ -168,7 +168,7 @@ export default function ReviewsPage() {
         data_estudo: new Date().toISOString(),
         tempo_dedicado: 0,
         revisao_programada_id: pendingReviewId,
-      } as any);
+      });
 
       await reviewService.complete(pendingReviewId);
       const ofensivaAfter = await offensivaService.getMe();
