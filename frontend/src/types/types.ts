@@ -42,6 +42,11 @@ export interface RegistroEstudo {
   created_at: string;
   updated_at: string;
   tema?: TemaDeEstudo;
+
+  // detalhes opcionais retornados pela API
+  slotCronograma?: SlotCronograma;
+  revisoesGeradas?: Revisao[];
+  revisaoConcluida?: Revisao | null;
 }
 
 export interface Revisao {

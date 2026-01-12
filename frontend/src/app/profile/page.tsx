@@ -1,31 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Control, useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Trash2,
+  UserX,
+  Database,
+  History,
+  ChevronRight,
+  Save,
+} from "lucide-react";
 import { useAppContext } from "@/context/app-context";
-import { authService, userService, DiaSemana, Usuario } from "@/lib/auth";
+import { authService, DiaSemana, Usuario } from "@/lib/auth";
+import { userService } from "@/services/user-service";
 import { FormModal } from "@/components/form-modal";
+import {
+  ProfileFormValues,
+  UserSettingsForm,
+} from "@/components/profile/user-settings-form";
+import { UserProfile } from "@/components/profile/user-profile";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
+import { DangerActionModal } from "@/components/settings/DangerActionModal";
+import { GeneralSettings } from "@/components/settings/GeneralSettings";
 
-const diaSemanaValues = [
-  "Dom",
-  "Seg",
-  "Ter",
-  "Qua",
-  "Qui",
-  "Sex",
-  "Sab",
-] as const;
-
-const profileSchema = z.object({
-  nome: z.string().min(2, "Informe um nome"),
-  primeiroDiaSemana: z.enum(diaSemanaValues),
-  planejamentoRevisoes: z
-    .array(z.number().int().positive())
-    .min(1, "Inclua pelo menos um dia")
-    .refine((arr) => new Set(arr).size === arr.length, "Não repetir valores"),
-});
+import { ReviewSettings } from "@/components/settings/ReviewSettings";
+import { studyService } from "@/services/study-service";
+import { useRouter } from "next/navigation";
 
 const emailSchema = z.object({
   novoEmail: z.string().email("Email inválido"),
@@ -43,58 +45,44 @@ const passwordSchema = z.object({
     ),
 });
 
-type ProfileForm = z.infer<typeof profileSchema>;
 type EmailForm = z.infer<typeof emailSchema>;
 type PasswordForm = z.infer<typeof passwordSchema>;
-type ApiErrorShape = { error?: string; statusCode?: number };
 
 const diaSemanaOptions: { label: string; value: DiaSemana }[] = [
   { label: "Domingo", value: "Dom" },
   { label: "Segunda", value: "Seg" },
-  { label: "Terça-feira", value: "Ter" },
-  { label: "Quarta-feira", value: "Qua" },
-  { label: "Quinta-feira", value: "Qui" },
-  { label: "Sexta-feira", value: "Sex" },
+  { label: "Terça", value: "Ter" },
+  { label: "Quarta", value: "Qua" },
+  { label: "Quinta", value: "Qui" },
+  { label: "Sexta", value: "Sex" },
   { label: "Sábado", value: "Sab" },
 ];
 
-const sortedSet = (values: number[]) => [...values].sort((a, b) => a - b);
-
-function usePlanejamentoValues(control: Control<ProfileForm>) {
-  return useWatch({
-    control,
-    name: "planejamentoRevisoes",
-    defaultValue: [],
-  }) as number[];
-}
-
 export default function ProfilePage() {
+  const router = useRouter();
   const { user, setUser } = useAppContext();
-  const [editing, setEditing] = useState(false);
-  const [planInput, setPlanInput] = useState("");
+
   const [emailModal, setEmailModal] = useState(false);
   const [passwordModal, setPasswordModal] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{
-    message: string;
-    variant: "error";
-  } | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const profileForm = useForm<ProfileForm>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: user
-      ? {
-        nome: user.nome || "",
-        primeiroDiaSemana: user.primeiroDiaSemana || "Dom",
-        planejamentoRevisoes: [
-          ...(user.planejamentoRevisoes ?? [1, 7, 14]),
-        ].sort((a, b) => a - b),
-      }
-      : undefined,
-  });
-  const { reset } = profileForm;
-  const planejamentoValues = usePlanejamentoValues(profileForm.control);
+  // States for general settings
+  const [dailyGoal, setDailyGoal] = useState(60);
+  const [intervals, setIntervals] = useState<number[]>([1, 7, 14]);
+  const [primeiroDiaSemana, setPrimeiroDiaSemana] = useState<DiaSemana>("Dom");
+
+  useEffect(() => {
+    if (user) {
+      setDailyGoal(user.metaDiaria || 60);
+      setIntervals(
+        [...(user.planejamentoRevisoes || [1, 7, 14])].sort((a, b) => a - b)
+      );
+      setPrimeiroDiaSemana(user.primeiroDiaSemana || "Dom");
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!toast) return;
@@ -102,84 +90,90 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const handleApiError = (res: ApiErrorShape) => {
-    const isServerError = res.statusCode === 500;
-    const fallback = isServerError
-      ? "Houve uma falha no servidor. Tente novamente depois."
-      : "Não foi possível completar a ação.";
-    const messageToShow = isServerError ? fallback : res.error || fallback;
-    setError(messageToShow);
-    setToast({ message: messageToShow, variant: "error" });
-  };
-
-  // Keep form inputs in sync with the user from context when it changes.
-  useEffect(() => {
-    if (!user || editing) return;
-    reset({
-      nome: user.nome || "",
-      primeiroDiaSemana: user.primeiroDiaSemana || "Dom",
-      planejamentoRevisoes: [...(user.planejamentoRevisoes ?? [1, 7, 14])].sort(
-        (a, b) => a - b
-      ),
-    });
-  }, [user, editing, reset]);
-
   const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) });
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
   });
 
+  const [modalConfig, setModalConfig] = useState<{
+    type: "records" | "data" | "account" | null;
+    title: string;
+    description: string;
+    confirmText: string;
+  }>({
+    type: null,
+    title: "",
+    description: "",
+    confirmText: "",
+  });
+
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Carregando perfil...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
 
-  const addPlano = () => {
-    const parsed = Number(planInput);
-    if (Number.isNaN(parsed)) return;
-    const arr: number[] = planejamentoValues;
-    if (parsed <= 0) return;
-    if (arr.includes(parsed)) return;
-    const next = sortedSet([...arr, parsed]);
-    profileForm.setValue("planejamentoRevisoes", next, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setPlanInput("");
+  const handleApiSuccess = (message: string) => {
+    setToast({ variant: "success", message });
   };
 
-  const removePlano = (value: number) => {
-    const arr: number[] = planejamentoValues;
-    const next = sortedSet(arr.filter((v) => v !== value));
-    profileForm.setValue("planejamentoRevisoes", next, {
-      shouldDirty: true,
-      shouldValidate: true,
+  const handleApiError = (err: unknown) => {
+    const message =
+      typeof err === "object" &&
+      err !== null &&
+      "error" in err &&
+      typeof (err as { error?: unknown }).error === "string"
+        ? (err as { error?: string }).error
+        : err instanceof Error
+        ? err.message
+        : "Houve uma falha no servidor. Tente novamente depois.";
+    setToast({
+      variant: "error",
+      message:
+        message ?? "Houve uma falha no servidor. Tente novamente depois.",
     });
   };
 
-  const handleProfileSubmit = profileForm.handleSubmit(
-    async (data: ProfileForm) => {
-      setError(null);
-      setMessage(null);
-      const res = await userService.updateProfile(user.id, data);
-      if (res.error) {
-        handleApiError(res);
-        return;
-      }
-      if (res.data) {
-        setUser(res.data as Usuario);
-        setMessage("Dados atualizados");
-        setEditing(false);
-      }
+  const handleProfileSubmit = async (data: ProfileFormValues) => {
+    if (!user) return;
+    setIsSubmitting(true);
+    const res = await userService.updateProfile(user.id, data);
+    if (res.error) {
+      handleApiError(res);
+    } else if (res.data) {
+      setUser(res.data as Usuario);
+      handleApiSuccess("Dados atualizados com sucesso!");
     }
-  );
+    setIsSubmitting(false);
+  };
+
+  const handlePreferencesSubmit = async () => {
+    if (!user) return;
+    setSaving(true);
+
+    // Atualiza planejamento e primeiroDiaSemana via PATCH /users/:id
+    // UpdateUserDto exige `nome`, então enviamos o nome atual (email como fallback)
+    const nomeValido = user.nome || user.email || "Usuário";
+
+    const res = await userService.updateProfile(user.id, {
+      nome: nomeValido,
+      planejamentoRevisoes: intervals,
+      primeiroDiaSemana: primeiroDiaSemana,
+      metaDiaria: dailyGoal,
+    });
+
+    if (res.error) {
+      handleApiError(res);
+    } else if (res.data) {
+      setUser(res.data as Usuario);
+      handleApiSuccess("Preferências salvas com sucesso!");
+    }
+    setSaving(false);
+  };
 
   const handleEmailSubmit = emailForm.handleSubmit(async (data: EmailForm) => {
-    setError(null);
-    setMessage(null);
     const res = await authService.changeEmail({
       novoEmail: data.novoEmail,
       senha: data.senha,
@@ -188,7 +182,7 @@ export default function ProfilePage() {
       handleApiError(res);
       return;
     }
-    setMessage("Email atualizado");
+    handleApiSuccess("Email atualizado com sucesso!");
     setEmailModal(false);
     emailForm.reset();
     const refreshed = await authService.getProfile();
@@ -197,8 +191,6 @@ export default function ProfilePage() {
 
   const handlePasswordSubmit = passwordForm.handleSubmit(
     async (data: PasswordForm) => {
-      setError(null);
-      setMessage(null);
       const res = await authService.changePassword({
         senhaAtual: data.senhaAtual,
         novaSenha: data.novaSenha,
@@ -207,183 +199,224 @@ export default function ProfilePage() {
         handleApiError(res);
         return;
       }
-      setMessage("Senha atualizada");
+      handleApiSuccess("Senha atualizada com sucesso!");
       setPasswordModal(false);
       passwordForm.reset();
     }
   );
 
-  const card = "ui-card";
+  const openModal = (type: "records" | "data" | "account") => {
+    if (type === "records") {
+      setModalConfig({
+        type,
+        title: "Apagar todos os registros",
+        description:
+          "Isso removerá permanentemente todo o seu histórico de estudos e as revisões programadas. Seus temas e cronograma permanecerão intactos.",
+        confirmText: "Apagar Registros",
+      });
+    } else if (type === "data") {
+      setModalConfig({
+        type,
+        title: "Apagar todos os dados",
+        description:
+          "Isso removerá permanentemente seus registros, revisões, temas de estudo e slots do cronograma. Sua conta de usuário será mantida.",
+        confirmText: "Apagar Tudo",
+      });
+    } else {
+      setModalConfig({
+        type,
+        title: "Excluir conta",
+        description:
+          "Esta ação é irreversível. Todos os seus dados, incluindo perfil, temas, cronograma e histórico, serão apagados permanentemente.",
+        confirmText: "Excluir Minha Conta",
+      });
+    }
+  };
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      if (modalConfig.type === "records") {
+        const res = await studyService.deleteAll();
+        if (res.error) {
+          setToast({ variant: "error", message: res.error });
+        } else {
+          setToast({ variant: "success", message: "Histórico apagado." });
+        }
+      } else if (modalConfig.type === "data") {
+        // Mantemos a funcionalidade de apagar todos os dados para outra tarefa futura
+        setToast({
+          variant: "error",
+          message: "Funcionalidade indisponível no momento.",
+        });
+      } else if (modalConfig.type === "account") {
+        await userService.deleteAccount(user!.id);
+        router.push("/login");
+        return;
+      }
+    } catch (error) {
+      console.debug(error);
+      setToast({
+        variant: "error",
+        message: "Ocorreu um erro ao processar a solicitação.",
+      });
+    } finally {
+      setLoading(false);
+      setModalConfig({ ...modalConfig, type: null });
+    }
+  };
 
   return (
-    <div className="app-page-surface py-10">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={`rounded-2xl shadow p-6 sm:p-8 ${card}`}>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-slate-400">
-                Perfil
-              </p>
-              <h1 className="text-3xl font-semibold">Informações do usuário</h1>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setEmailModal(true)}
-                className="ui-btn-secondary"
-              >
-                Editar e-mail
-              </button>
-              <button
-                onClick={() => setPasswordModal(true)}
-                className="ui-btn-secondary"
-              >
-                Editar senha
-              </button>
-            </div>
+    <div className="min-h-screen bg-slate-50/50 pb-20">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+              Perfil e Configurações
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Gerencie suas informações e preferências
+            </p>
+          </div>
+        </div>
+
+        {/* User Profile Section */}
+        <UserProfile
+          user={user}
+          onEditEmail={() => setEmailModal(true)}
+          onEditPassword={() => setPasswordModal(true)}
+        />
+
+        {/* User Info Form */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <h2 className="text-lg font-bold text-slate-800 mb-4">
+            Informações do Usuário
+          </h2>
+          <UserSettingsForm
+            user={user}
+            onSubmit={handleProfileSubmit}
+            onCancel={() => {}}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+
+        {/* Preferences Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
+          <h2 className="text-lg font-bold text-slate-800">
+            Preferências de Estudo
+          </h2>
+
+          <GeneralSettings dailyGoal={dailyGoal} onChange={setDailyGoal} />
+
+          <div className="space-y-2">
+            <label
+              htmlFor="primeiroDiaSemana"
+              className="text-sm font-medium text-slate-700"
+            >
+              Primeiro dia da semana
+            </label>
+            <select
+              id="primeiroDiaSemana"
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 cursor-pointer"
+              value={primeiroDiaSemana}
+              onChange={(e) =>
+                setPrimeiroDiaSemana(e.target.value as DiaSemana)
+              }
+            >
+              {diaSemanaOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {message && <div className="ui-alert-success mb-4">{message}</div>}
-          {error && <div className="ui-alert-error mb-4">{error}</div>}
+          <ReviewSettings intervals={intervals} onChange={setIntervals} />
 
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              // Prevent any implicit submits; saving is handled explicitly.
-              e.preventDefault();
-            }}
-          >
-            <div>
-              <label className="block text-sm font-medium mb-1">Nome</label>
-              {editing ? (
-                <input className="ui-input" {...profileForm.register("nome")} />
+          <div className="flex justify-end">
+            <button
+              onClick={handlePreferencesSubmit}
+              disabled={saving}
+              className="ui-btn-primary flex items-center gap-2 px-6 py-3 shadow-lg shadow-indigo-200"
+            >
+              {saving ? (
+                "Salvando..."
               ) : (
-                <p className="text-lg font-semibold">{user.nome || "—"}</p>
-              )}
-              <p className="text-sm text-red-600">
-                {profileForm.formState.errors.nome?.message}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Primeiro dia da semana
-              </label>
-              {editing ? (
-                <select
-                  className="ui-input"
-                  {...profileForm.register("primeiroDiaSemana")}
-                >
-                  {diaSemanaOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-lg font-semibold">
-                  {diaSemanaOptions.find(
-                    (d) => d.value === user.primeiroDiaSemana
-                  )?.label || "—"}
-                </p>
-              )}
-              <p className="text-sm text-red-600">
-                {
-                  profileForm.formState.errors.primeiroDiaSemana
-                    ?.message as string
-                }
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Planejamento de revisões
-              </label>
-              {editing ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      className="flex-1 ui-input"
-                      value={planInput}
-                      onChange={(e) => setPlanInput(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={addPlano}
-                      className="ui-btn-secondary"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {planejamentoValues.map((dia: number) => (
-                      <span
-                        key={dia}
-                        className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold border"
-                        style={{
-                          borderColor: "var(--landing-border)",
-                          background: "var(--landing-surface-alt)",
-                          color: "var(--landing-text)",
-                        }}
-                      >
-                        {dia} dias
-                        <button
-                          type="button"
-                          onClick={() => removePlano(dia)}
-                          className="text-amber-700 hover:text-amber-800 cursor-pointer"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <p className="text-sm text-red-600">
-                    {
-                      profileForm.formState.errors.planejamentoRevisoes
-                        ?.message as string
-                    }
-                  </p>
-                </div>
-              ) : (
-                <p className="text-lg font-semibold">
-                  {(user.planejamentoRevisoes || []).join(", ")}
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              {editing ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => handleProfileSubmit()}
-                    className="ui-btn-primary"
-                  >
-                    Salvar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditing(false);
-                      profileForm.reset();
-                    }}
-                    className="ui-btn-secondary"
-                  >
-                    Cancelar
-                  </button>
+                  <Save className="w-4 h-4" /> Salvar Preferências
                 </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="ui-btn-secondary"
-                >
-                  Editar dados
-                </button>
               )}
-            </div>
-          </form>
+            </button>
+          </div>
+        </div>
+
+        {/* Danger Zone Section */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-slate-100">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-500" />
+              Zona de Perigo
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Ações irreversíveis relacionadas aos seus dados
+            </p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            <button
+              onClick={() => openModal("records")}
+              className="w-full p-6 flex items-start gap-4 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+                <History className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 group-hover:text-rose-600 transition-colors">
+                  Apagar todos os registros
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Remove apenas o histórico de estudos e revisões programadas.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-300 self-center" />
+            </button>
+            <button
+              onClick={() => openModal("data")}
+              className="w-full p-6 flex items-start gap-4 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 group-hover:text-rose-600 transition-colors">
+                  Apagar todos os dados
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Reseta sua conta limpando temas, cronograma e registros.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-300 self-center" />
+            </button>
+            <button
+              onClick={() => openModal("account")}
+              className="w-full p-6 flex items-start gap-4 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <UserX className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-slate-900 group-hover:text-rose-600 transition-colors">
+                  Excluir conta
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Encerra sua conta e remove permanentemente todas as
+                  informações.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-300 self-center" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -391,13 +424,10 @@ export default function ProfilePage() {
         open={emailModal}
         onClose={() => setEmailModal(false)}
         title="Atualizar e-mail"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleEmailSubmit(e);
-        }}
+        onSubmit={handleEmailSubmit}
         submitLabel="Salvar"
       >
-        <div>
+        <div className="space-y-2">
           <label className="block text-sm font-medium mb-1">Novo e-mail</label>
           <input
             type="email"
@@ -408,7 +438,7 @@ export default function ProfilePage() {
             {emailForm.formState.errors.novoEmail?.message}
           </p>
         </div>
-        <div>
+        <div className="space-y-2">
           <label className="block text-sm font-medium mb-1">Senha atual</label>
           <input
             type="password"
@@ -425,13 +455,10 @@ export default function ProfilePage() {
         open={passwordModal}
         onClose={() => setPasswordModal(false)}
         title="Atualizar senha"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handlePasswordSubmit(e);
-        }}
+        onSubmit={handlePasswordSubmit}
         submitLabel="Salvar"
       >
-        <div>
+        <div className="space-y-2">
           <label className="block text-sm font-medium mb-1">Senha atual</label>
           <input
             type="password"
@@ -442,7 +469,7 @@ export default function ProfilePage() {
             {passwordForm.formState.errors.senhaAtual?.message}
           </p>
         </div>
-        <div>
+        <div className="space-y-2">
           <label className="block text-sm font-medium mb-1">Nova senha</label>
           <input
             type="password"
@@ -455,13 +482,15 @@ export default function ProfilePage() {
         </div>
       </FormModal>
 
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className="rounded-lg bg-red-600 text-white px-4 py-3 shadow-lg border border-red-700">
-            {toast.message}
-          </div>
-        </div>
-      )}
+      <DangerActionModal
+        isOpen={modalConfig.type !== null}
+        onClose={() => setModalConfig({ ...modalConfig, type: null })}
+        onConfirm={handleConfirm}
+        title={modalConfig.title}
+        description={modalConfig.description}
+        confirmText={modalConfig.confirmText}
+        loading={loading}
+      />
     </div>
   );
 }

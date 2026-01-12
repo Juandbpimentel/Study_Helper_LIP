@@ -40,6 +40,13 @@ export class UserResponseDto {
   planejamentoRevisoes!: number[];
 
   @ApiProperty({
+    description: 'Meta de estudo diária (minutos)',
+    required: false,
+    example: 60,
+  })
+  metaDiaria!: number;
+
+  @ApiProperty({
     description: 'Limite máximo de slots por dia da semana (quando definido).',
     required: false,
     nullable: true,

@@ -13,16 +13,7 @@ import {
   parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar as CalendarIcon,
-  BookOpen,
-  RotateCcw,
-  CheckCircle2,
-  X,
-  Loader2,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 // 1. IMPORTAÇÃO DOS TIPOS CENTRAIS
 import { Revisao, RegistroEstudo, SlotCronograma } from "@/types/types";
@@ -32,197 +23,20 @@ import { Revisao, RegistroEstudo, SlotCronograma } from "@/types/types";
 import { dashboardService } from "@/services/dashboard-service";
 // Usamos o reviewService para ações específicas
 import { reviewService } from "@/services/review-service";
+import { studyService } from "@/services/study-service";
+
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
+import { RecordDetailsModal } from "@/components/records/RecordDetailsModal";
+import { DayDetailsModal } from "@/components/calendar/DayDetailsModal";
 
 // --- COMPONENTES AUXILIARES (Badge e Modal) ---
 
-// Helper para cor hexadecimal com opacidade
-const getBadgeStyle = (color: string = "#6366f1") => {
-  return {
-    backgroundColor: `${color}20`,
-    color: color,
-    border: `1px solid ${color}40`,
-  };
-};
-
-function Badge({ children, className, style }: any) {
-  return (
-    <span
-      className={`px-2 py-0.5 rounded text-xs font-medium ${className}`}
-      style={style}
-    >
-      {children}
-    </span>
-  );
-}
-
-// Interface para os dados do dia
 interface DayData {
   dayStudies: RegistroEstudo[];
   dayReviews: Revisao[];
   pendingReviews: Revisao[];
   completedReviews: Revisao[];
   scheduledSubjects: SlotCronograma[];
-}
-
-// Modal simplificado com Tailwind
-function DayDetailsModal({
-  isOpen,
-  onClose,
-  date,
-  data,
-  onCompleteReview,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  date: Date | null;
-  data: DayData | null; // Tipagem melhorada
-  onCompleteReview: (id: number) => void;
-}) {
-  if (!isOpen || !date || !data) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-semibold text-slate-800">
-              {format(date, "dd 'de' MMMM, EEEE", { locale: ptBR })}
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-50 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 space-y-6 overflow-y-auto">
-          {/* Disciplinas do Cronograma */}
-          {data.scheduledSubjects.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Cronograma do Dia
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {data.scheduledSubjects.map((slot) => (
-                  <Badge key={slot.id} style={getBadgeStyle(slot.tema?.cor)}>
-                    {slot.tema?.tema}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Estudos Realizados */}
-          {data.dayStudies.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-2">
-                <BookOpen className="w-3 h-3" />
-                Estudos Realizados
-              </h4>
-              <div className="space-y-2">
-                {data.dayStudies.map((study) => (
-                  <div
-                    key={study.id}
-                    className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100"
-                  >
-                    <p className="font-medium text-slate-800 text-sm">
-                      {study.conteudo_estudado}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-slate-500">
-                        {study.tema?.tema}
-                      </span>
-                      <span className="text-xs font-medium text-indigo-600">
-                        {study.tempo_dedicado} min
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Revisões Pendentes */}
-          {data.pendingReviews.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-2">
-                <RotateCcw className="w-3 h-3" />
-                Revisões Pendentes
-              </h4>
-              <div className="space-y-2">
-                {data.pendingReviews.map((review) => (
-                  <div
-                    key={review.id}
-                    className="p-3 bg-amber-50 rounded-lg border border-amber-100 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-800 text-sm truncate">
-                        {review.registro_origem?.conteudo_estudado || "Revisão"}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-slate-500">
-                          {review.tema?.tema}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onCompleteReview(review.id)}
-                      className="p-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors"
-                      title="Concluir Revisão"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Revisões Concluídas */}
-          {data.completedReviews.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-2">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                Revisões Concluídas
-              </h4>
-              <div className="space-y-2">
-                {data.completedReviews.map((review) => (
-                  <div
-                    key={review.id}
-                    className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100 opacity-75"
-                  >
-                    <p className="font-medium text-slate-800 text-sm line-through decoration-slate-400">
-                      {review.registro_origem?.conteudo_estudado}
-                    </p>
-                    <span className="text-xs text-slate-500 mt-1 block">
-                      {review.tema?.tema}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Estado Vazio */}
-          {!data.dayStudies.length &&
-            !data.pendingReviews.length &&
-            !data.completedReviews.length &&
-            !data.scheduledSubjects.length && (
-              <div className="text-center py-8">
-                <p className="text-slate-400 text-sm">
-                  Nenhum evento registrado neste dia.
-                </p>
-              </div>
-            )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // --- PÁGINA PRINCIPAL ---
@@ -232,11 +46,22 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDayDetails, setShowDayDetails] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   // 3. ESTADOS TIPADOS
   const [reviews, setReviews] = useState<Revisao[]>([]);
   const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
   const [studyRecords, setStudyRecords] = useState<RegistroEstudo[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<RegistroEstudo | null>(
+    null
+  );
+  const [showRecordModal, setShowRecordModal] = useState(false);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Carregar dados
   const fetchData = useCallback(async () => {
@@ -261,10 +86,33 @@ export default function CalendarPage() {
   const handleCompleteReview = async (id: number) => {
     try {
       await reviewService.complete(id);
-      fetchData();
-    } catch (error) {
-      alert("Erro ao concluir revisão");
+      await fetchData();
+      setToast({ variant: "success", message: "Revisão concluída!" });
+    } catch (e) {
+      console.error(e);
+      setToast({ variant: "error", message: "Erro ao concluir revisão." });
     }
+  };
+
+  const openRecord = (recordId: number) => {
+    const r = studyRecords.find((s) => s.id === recordId) ?? null;
+    if (r) {
+      setSelectedRecord(r);
+      setShowRecordModal(true);
+      return;
+    }
+    // fallback: fetch from API
+    studyService.getById(recordId).then((res) => {
+      if (res.data) {
+        setSelectedRecord(res.data);
+        setShowRecordModal(true);
+      } else {
+        setToast({
+          variant: "error",
+          message: res.error || "Registro não encontrado",
+        });
+      }
+    });
   };
 
   // Cálculos do Calendário
@@ -326,6 +174,7 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 pb-20">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Header da Página */}
         <div className="mb-8">
@@ -343,7 +192,7 @@ export default function CalendarPage() {
           <div className="p-4 flex items-center justify-between border-b border-slate-100">
             <button
               onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              className="p-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors"
+              className="p-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-indigo-600 transition-all hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -352,7 +201,7 @@ export default function CalendarPage() {
             </h2>
             <button
               onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors"
+              className="p-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-indigo-600 transition-all hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -392,12 +241,13 @@ export default function CalendarPage() {
                   <button
                     key={day.toISOString()}
                     onClick={() => handleDayClick(day)}
-                    className={`aspect-square p-1 rounded-xl transition-all duration-200 relative group
+                    className={`aspect-square p-1 rounded-xl transition-transform duration-200 transform relative group cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200
                       ${
                         isCurrentDay
                           ? "bg-indigo-50 ring-2 ring-indigo-200"
                           : "hover:bg-slate-50"
                       }
+                      hover:scale-105 active:scale-95
                     `}
                   >
                     <div
@@ -464,7 +314,19 @@ export default function CalendarPage() {
           date={selectedDate}
           data={selectedDayData}
           onCompleteReview={handleCompleteReview}
+          onOpenRecord={openRecord}
+          onToast={setToast}
         />
+
+        {showRecordModal && (
+          <RecordDetailsModal
+            record={selectedRecord}
+            onClose={() => {
+              setShowRecordModal(false);
+              setSelectedRecord(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

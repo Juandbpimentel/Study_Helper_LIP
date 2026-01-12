@@ -36,7 +36,10 @@ export function SubjectsTable({ data }: SubjectsTableProps) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.map((subject) => (
-                <tr key={subject.id} className="hover:bg-slate-50/50">
+                <tr
+                  key={subject.id}
+                  className="hover:bg-slate-50/50 cursor-pointer active:scale-95"
+                >
                   <td className="px-6 py-3 font-medium text-slate-700">
                     <div className="flex items-center gap-3">
                       <div

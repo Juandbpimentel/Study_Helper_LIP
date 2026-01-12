@@ -1,17 +1,30 @@
 import { Clock } from "lucide-react";
 
-interface ReviewIntervals {
-  d1: number;
-  d2: number;
-  d3: number;
-}
-
 interface ReviewSettingsProps {
-  intervals: ReviewIntervals;
-  onChange: (newIntervals: ReviewIntervals) => void;
+  intervals: number[];
+  onChange: (newIntervals: number[]) => void;
 }
 
 export function ReviewSettings({ intervals, onChange }: ReviewSettingsProps) {
+  const setAt = (idx: number, value: number) => {
+    const next = intervals.slice();
+    next[idx] = value;
+    onChange(next.filter((n) => Number.isFinite(n) && n > 0));
+  };
+
+  const addInterval = () => {
+    const nextDefault = intervals.length
+      ? intervals[intervals.length - 1] + 1
+      : 1;
+    onChange([...intervals, nextDefault]);
+  };
+
+  const removeAt = (idx: number) => {
+    const next = intervals.slice();
+    next.splice(idx, 1);
+    onChange(next);
+  };
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
       <div className="flex items-center gap-3 mb-6">
@@ -26,58 +39,49 @@ export function ReviewSettings({ intervals, onChange }: ReviewSettingsProps) {
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
           Configure os dias para cada revisão após estudar um conteúdo novo.
+          Deixe em branco para não agendar revisões automaticamente.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">
-              1ª Revisão (dias)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="30"
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all text-slate-700"
-              value={intervals.d1}
-              onChange={(e) =>
-                onChange({ ...intervals, d1: parseInt(e.target.value) || 1 })
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">
-              2ª Revisão (dias)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="60"
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all text-slate-700"
-              value={intervals.d2}
-              onChange={(e) =>
-                onChange({ ...intervals, d2: parseInt(e.target.value) || 7 })
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">
-              3ª Revisão (dias)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="90"
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all text-slate-700"
-              value={intervals.d3}
-              onChange={(e) =>
-                onChange({ ...intervals, d3: parseInt(e.target.value) || 14 })
-              }
-            />
-          </div>
+        <div className="space-y-3">
+          {intervals.length === 0 && (
+            <div className="text-sm text-slate-500">
+              Nenhum intervalo definido.
+            </div>
+          )}
+
+          {intervals.map((iv, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={iv}
+                onChange={(e) => setAt(idx, parseInt(e.target.value) || 1)}
+                className="w-28 px-3 py-2.5 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all text-slate-700"
+              />
+              <div className="text-sm text-slate-600 flex-1">dias após</div>
+              <button
+                type="button"
+                onClick={() => removeAt(idx)}
+                className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-transform transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
+                aria-label={`Remover intervalo ${iv} dias`}
+              >
+                Remover
+              </button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={addInterval}
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200 active:scale-95"
+          >
+            + Adicionar intervalo
+          </button>
         </div>
 
         <p className="text-xs text-slate-400 mt-2">
-          Padrão recomendado: D+1, D+7, D+14 (baseado na curva de esquecimento)
+          Recomendações: D+1, D+7, D+14 são um bom ponto de partida.
         </p>
       </div>
     </div>

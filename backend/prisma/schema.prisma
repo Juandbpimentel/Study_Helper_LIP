@@ -16,6 +16,7 @@ model Usuario {
   //preferências do usuário
   primeiroDiaSemana    DiaSemana @default(Dom) @map("primeiro_dia_semana")
   planejamentoRevisoes Int[]     @default([1, 7, 14]) @map("planejamento_revisoes")
+  metaDiaria           Int?      @default(60) @map("meta_diaria")
 
   // Configurações do cronograma / atraso
   maxSlotsPorDia           Int? @map("max_slots_por_dia")
@@ -139,7 +140,7 @@ model RegistroEstudo {
   revisoesGeradas  RevisaoProgramada[] @relation("RegistroOrigem")
   revisaoConcluida RevisaoProgramada?  @relation("RegistroConclusao")
 
-  anotacoes         String? @db.VarChar(2000)
+  anotacoes String? @db.VarChar(2000)
 
   usuario   Usuario @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   creatorId Int

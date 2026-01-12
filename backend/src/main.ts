@@ -32,8 +32,6 @@ async function bootstrap() {
   const tempAllowedOrigins: string[] = [];
   tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
   tempAllowedOrigins.push(process.env.PUBLIC_API_URL || '');
-  // Dev ergonomics: permitir localhost e ferramentas de teste.
-  // Útil inclusive quando a API roda em docker com NODE_ENV=production.
   tempAllowedOrigins.push('http://localhost:3000');
   tempAllowedOrigins.push(`http://localhost:${port}`);
   tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
@@ -65,8 +63,6 @@ async function bootstrap() {
         return;
       }
 
-      // Não derruba a API com 500 quando a origem não é permitida.
-      // Sem os headers de CORS, o browser bloqueia a resposta naturalmente.
       callback(null, false);
     },
     credentials: true,
@@ -74,7 +70,6 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization',
   });
 
-  // Filtros globais: primeiro tratamos erros específicos do Prisma, depois o filtro genérico
   app.useGlobalFilters(
     new PrismaExceptionFilter(),
     new GlobalExceptionFilter(),

@@ -189,6 +189,58 @@ export class RegistrosService {
     return removido;
   }
 
+  async deletarTodos(usuarioId: number) {
+    // Busca ids dos registros do usuário e eventIds de revisoes geradas
+    const registros = await this.prisma.registroEstudo.findMany({
+      where: { creatorId: usuarioId },
+      select: {
+        id: true,
+        revisoesGeradas: { select: { googleEventId: true } },
+      },
+    });
+
+    const registroIds = registros.map((r) => r.id);
+
+    if (!registroIds.length) return { deleted: 0 };
+
+    const eventIds = registros
+      .flatMap((r) => r.revisoesGeradas?.map((g) => g.googleEventId) ?? [])
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    // Se houver revisões concluídas por esses registros, reabre-as
+    const revisoesConcluidas = await this.prisma.revisaoProgramada.findMany({
+      where: { creatorId: usuarioId, registroConclusaoId: { in: registroIds } },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      if (revisoesConcluidas.length) {
+        await tx.revisaoProgramada.updateMany({
+          where: { id: { in: revisoesConcluidas.map((r) => r.id) } },
+          data: {
+            registroConclusaoId: null,
+            statusRevisao: StatusRevisao.Pendente,
+          },
+        });
+      }
+
+      await tx.registroEstudo.deleteMany({
+        where: { id: { in: registroIds } },
+      });
+    });
+
+    if (eventIds.length) {
+      await this.googleCalendar.deleteRevisionEventsByEventIds(
+        usuarioId,
+        eventIds,
+      );
+    }
+
+    void this.ofensivaService.recalcularEAtualizar(usuarioId);
+
+    return { deleted: registroIds.length };
+  }
+
   async criarComTx(
     tx: Prisma.TransactionClient,
     usuarioId: number,

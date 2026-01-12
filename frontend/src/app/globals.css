@@ -170,8 +170,8 @@ body {
 
   .ui-btn-primary {
     @apply px-4 py-2 rounded-lg text-white font-semibold focus:outline-none;
-    background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
-    box-shadow: 0 10px 30px rgba(245, 158, 11, 0.28);
+    background: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+    box-shadow: 0 10px 30px rgba(79, 70, 229, 0.28);
     transition: filter 120ms ease, transform 120ms ease;
   }
 

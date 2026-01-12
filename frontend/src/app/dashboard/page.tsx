@@ -34,16 +34,20 @@ import { scheduleService } from "@/services/schedule-service";
 import { subjectService } from "@/services/subject-service";
 
 import { StatCard } from "@/components/ui/StatCard";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
 import { WeeklySchedule } from "@/components/dashboard/WeeklySchedule";
 import { ReviewList } from "@/components/dashboard/ReviewList";
 import { RecentStudies } from "@/components/dashboard/RecentStudies";
 import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
 import { ScheduleEditor } from "@/components/subjects/ScheduleEditor";
+import { RecordDetailsModal } from "@/components/records/RecordDetailsModal";
+import { studyService } from "@/services/study-service";
 
 export default function DashboardPage() {
   const { user, setUser } = useAppContext();
   const [loading, setLoading] = useState(true);
   const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   const [showScheduleEditor, setShowScheduleEditor] = useState(false);
 
@@ -51,6 +55,12 @@ export default function DashboardPage() {
   const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
   const [records, setRecords] = useState<RegistroEstudo[]>([]);
   const [subjects, setSubjects] = useState<TemaDeEstudo[]>([]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -99,13 +109,42 @@ export default function DashboardPage() {
   ) => {
     try {
       await scheduleService.update(newScheduleMap);
-      alert("Cronograma atualizado com sucesso!");
+      setToast({
+        variant: "success",
+        message: "Cronograma atualizado com sucesso!",
+      });
       setShowScheduleEditor(false);
       await loadDashboardData();
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar cronograma.");
+      setToast({ variant: "error", message: "Erro ao salvar cronograma." });
     }
+  };
+
+  // Record details modal
+  const [selectedRecord, setSelectedRecord] = useState<RegistroEstudo | null>(
+    null
+  );
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+
+  const openRecord = async (id: number) => {
+    try {
+      const res = await studyService.getById(id);
+      if (res.error) {
+        setToast({ variant: "error", message: res.error });
+        return;
+      }
+      setSelectedRecord(res.data || null);
+      setIsRecordModalOpen(true);
+    } catch (err) {
+      console.error("Erro ao buscar registro:", err);
+      setToast({ variant: "error", message: "Erro ao abrir registro." });
+    }
+  };
+
+  const closeRecordModal = () => {
+    setIsRecordModalOpen(false);
+    setSelectedRecord(null);
   };
 
   const today = new Date();
@@ -160,6 +199,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -172,7 +212,7 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => setIsStudyModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 w-full md:w-auto justify-center"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-indigo-200 transition-transform transform cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200 flex items-center gap-2 w-full md:w-auto justify-center"
           >
             <Plus className="w-5 h-5" />
             Registrar Estudo
@@ -237,7 +277,10 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <RecentStudies studies={recentStudiesData} />
+            <RecentStudies
+              studies={recentStudiesData}
+              onOpenRecord={openRecord}
+            />
           </div>
         </div>
 
@@ -255,6 +298,11 @@ export default function DashboardPage() {
           subjects={subjects}
           currentSchedule={schedule}
           onSave={handleSaveSchedule}
+        />
+
+        <RecordDetailsModal
+          record={selectedRecord}
+          onClose={closeRecordModal}
         />
       </div>
     </div>

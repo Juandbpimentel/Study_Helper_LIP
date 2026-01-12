@@ -12,9 +12,21 @@ import {
 } from "recharts";
 import { TrendingUp, Award } from "lucide-react";
 
+type DailyChartDatum = {
+  date: string;
+  estudos: number;
+};
+
+type StudyBySubjectDatum = {
+  name: string;
+  minutes: number;
+  hours: string | number;
+  color?: string;
+};
+
 interface StatisticsChartsProps {
-  dailyData: any[];
-  studyBySubject: any[];
+  dailyData: DailyChartDatum[];
+  studyBySubject: StudyBySubjectDatum[];
 }
 
 const COLORS = [
@@ -118,10 +130,17 @@ export function StatisticsCharts({
                     border: "none",
                     boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                   }}
-                  formatter={(value, name, props: any) => [
-                    `${props.payload.hours}h`,
-                    props.payload.name,
-                  ]}
+                  formatter={(
+                    value,
+                    _name,
+                    props: { payload?: StudyBySubjectDatum }
+                  ) => {
+                    const payload = props.payload;
+                    return [
+                      `${payload?.hours ?? value}h`,
+                      payload?.name ?? "Disciplina",
+                    ];
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>

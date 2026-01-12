@@ -80,7 +80,7 @@ describe('CronogramasService', () => {
       '2026-01-08T14:46:04.101Z',
     );
     expect(result.cronograma.slots[0].dataAlvo).toBe(
-      '2026-01-12T00:00:00.000Z',
+      new Date(2026, 0, 12, 0, 0, 0).toISOString(),
     );
     expect(result.cronograma.slots[0].status).toBe('pendente');
   });

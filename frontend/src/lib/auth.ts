@@ -11,6 +11,14 @@ export interface Usuario {
   versaoToken?: string;
   primeiroDiaSemana: DiaSemana | null;
   planejamentoRevisoes: number[];
+  metaDiaria?: number | null;
+}
+
+export interface UpdateProfileData {
+  nome: string;
+  primeiroDiaSemana: DiaSemana;
+  planejamentoRevisoes: number[];
+  metaDiaria?: number;
 }
 
 export interface LoginCredentials {

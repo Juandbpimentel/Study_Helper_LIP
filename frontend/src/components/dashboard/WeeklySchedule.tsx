@@ -96,7 +96,7 @@ export function WeeklySchedule({
         {onEdit && (
           <button
             onClick={onEdit}
-            className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200"
+            className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200 cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           >
             <Edit2 className="w-3.5 h-3.5" />
             Editar

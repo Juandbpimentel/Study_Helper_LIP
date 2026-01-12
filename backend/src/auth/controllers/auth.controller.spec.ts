@@ -19,7 +19,6 @@ describe('AuthController', () => {
     >
   >;
   let ofensivaServiceMock: jest.Mocked<Pick<OfensivaService, 'fromUsuario'>>;
-  // Use the exact parameter type for controller methods so tests match expected types
   type ChangePasswordReq = Parameters<AuthController['changePassword']>[0];
   type ChangeEmailReq = Parameters<AuthController['changeEmail']>[0];
   type LoginReq = Parameters<AuthController['login']>[1];
@@ -83,7 +82,6 @@ describe('AuthController', () => {
     ) => Promise<Usuario>
   >;
   beforeEach(() => {
-    // AuthService mocks - explicit this: void
     loginMock = jest.fn() as jest.MockedFunction<
       (this: void, dto: LoginRequestDto) => Promise<typeof authResult>
     >;
@@ -104,7 +102,6 @@ describe('AuthController', () => {
       loginFromGuard: loginFromGuardMock,
     } as unknown as jest.Mocked<AuthService>;
 
-    // UsersService mocks - explicit this: void
     changePasswordMock = jest.fn() as jest.MockedFunction<
       (
         this: void,

@@ -25,6 +25,7 @@ const publicUserSelect = {
   versaoToken: true,
   primeiroDiaSemana: true,
   planejamentoRevisoes: true,
+  metaDiaria: true,
   maxSlotsPorDia: true,
   slotAtrasoToleranciaDias: true,
   slotAtrasoMaxDias: true,
@@ -50,6 +51,7 @@ export type PublicUser = Pick<
   | 'versaoToken'
   | 'primeiroDiaSemana'
   | 'planejamentoRevisoes'
+  | 'metaDiaria'
   | 'maxSlotsPorDia'
   | 'slotAtrasoToleranciaDias'
   | 'slotAtrasoMaxDias'
@@ -185,9 +187,18 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<Usuario> {
+    const data: Prisma.UsuarioUpdateInput = {} as Prisma.UsuarioUpdateInput;
+    if (updateUserDto.nome !== undefined) data.nome = updateUserDto.nome;
+    if (updateUserDto.planejamentoRevisoes !== undefined)
+      data.planejamentoRevisoes = updateUserDto.planejamentoRevisoes as any;
+    if (updateUserDto.primeiroDiaSemana !== undefined)
+      data.primeiroDiaSemana = updateUserDto.primeiroDiaSemana as any;
+    if (updateUserDto.metaDiaria !== undefined)
+      data.metaDiaria = updateUserDto.metaDiaria as any;
+
     return await this.prisma.usuario.update({
       where: { id },
-      data: updateUserDto,
+      data,
     });
   }
 
@@ -195,9 +206,18 @@ export class UsersService {
     id: number,
     updateUserDto: UpdateUserDto,
   ): Promise<PublicUser> {
+    const data: Prisma.UsuarioUpdateInput = {} as Prisma.UsuarioUpdateInput;
+    if (updateUserDto.nome !== undefined) data.nome = updateUserDto.nome;
+    if (updateUserDto.planejamentoRevisoes !== undefined)
+      data.planejamentoRevisoes = updateUserDto.planejamentoRevisoes as any;
+    if (updateUserDto.primeiroDiaSemana !== undefined)
+      data.primeiroDiaSemana = updateUserDto.primeiroDiaSemana as any;
+    if (updateUserDto.metaDiaria !== undefined)
+      data.metaDiaria = updateUserDto.metaDiaria as any;
+
     return await this.prisma.usuario.update({
       where: { id },
-      data: updateUserDto,
+      data,
       select: publicUserSelect,
     });
   }

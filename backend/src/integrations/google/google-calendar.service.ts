@@ -84,8 +84,14 @@ function diaSemanaToByDay(dia: DiaSemana): string {
 }
 
 function formatGoogleAllDayDate(date: Date): string {
-  // Google Calendar API: para eventos all-day, `date` deve ser no formato YYYY-MM-DD.
-  return startOfDay(date).toISOString().slice(0, 10);
+  // Google Calendar API: para eventos all-day, `date` deve ser YYYY-MM-DD.
+  // Usamos componentes locais (ano/mês/dia) para garantir que o dia reflete o
+  // dia do usuário no seu fuso horário local, evitando deslocamentos por UTC.
+  const d = startOfDay(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 type Rgb = { r: number; g: number; b: number };

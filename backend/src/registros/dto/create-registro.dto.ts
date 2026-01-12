@@ -8,6 +8,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { IsNotInFuture } from '@/common/validators/is-not-in-future.validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
@@ -72,6 +73,7 @@ export class CreateRegistroDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsNotInFuture({ message: 'dataEstudo não pode ser no futuro' })
   dataEstudo?: string;
 }
 

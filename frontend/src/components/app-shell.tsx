@@ -77,13 +77,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <>
                 <Link
                   href="/login"
-                  className="h-10 px-5 rounded-full text-slate-600 font-medium text-sm flex items-center hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                  className="h-10 px-5 rounded-full text-slate-600 font-medium text-sm flex items-center hover:bg-slate-50 hover:text-indigo-600 transition-all cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 >
                   Entrar
                 </Link>
                 <Link
                   href="/register"
-                  className="h-10 px-5 rounded-full bg-indigo-600 text-white font-medium text-sm flex items-center shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors"
+                  className="h-10 px-5 rounded-full bg-indigo-600 text-white font-medium text-sm flex items-center shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 >
                   Criar Conta
                 </Link>

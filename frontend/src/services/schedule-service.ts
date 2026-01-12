@@ -1,32 +1,23 @@
 import { api } from "@/lib/api";
-import { SlotCronograma, TemaDeEstudo } from "@/types/types";
+import { SlotCronograma } from "@/types/types";
+import { mapCronogramaSlotFromApi } from "@/lib/mappers";
 
 interface BackendSlot {
   id?: number;
   diaSemana: string;
-  temaId: number;
+  temaId?: number;
   ordem?: number;
+  createdAt?: string;
   tema?: {
     id: number;
     tema: string;
-    cor: string;
+    cor?: string | null;
     descricao?: string;
     creatorId?: number;
-    created_at?: string;
-    updated_at?: string;
+    createdAt?: string;
+    updatedAt?: string;
   };
 }
-
-const dayToIdMap: Record<string, number> = {
-  Dom: 0,
-  Seg: 1,
-  Ter: 2,
-  Qua: 3,
-  Qui: 4,
-  Sex: 5,
-  Sab: 6,
-  Sáb: 6,
-};
 
 const idToDayMap: Record<number, string> = {
   0: "Dom",
@@ -40,49 +31,56 @@ const idToDayMap: Record<number, string> = {
 
 export const scheduleService = {
   async get() {
-    const response = await api.get<any>("/cronograma");
+    const response = await api.get<unknown>("/cronograma");
 
     let rawSlots: BackendSlot[] = [];
 
-    if (response.data?.cronograma?.slots) {
-      rawSlots = response.data.cronograma.slots;
-    } else if (response.data?.slots) {
-      rawSlots = response.data.slots;
-    } else if (Array.isArray(response.data)) {
-      rawSlots = response.data;
+    const data = response.data;
+    const record =
+      typeof data === "object" && data !== null
+        ? (data as Record<string, unknown>)
+        : null;
+
+    const cronograma = record?.["cronograma"];
+    const cronogramaRecord =
+      typeof cronograma === "object" && cronograma !== null
+        ? (cronograma as Record<string, unknown>)
+        : null;
+
+    const cronogramaSlots = cronogramaRecord?.["slots"];
+    const rootSlots = record?.["slots"];
+
+    if (Array.isArray(cronogramaSlots)) {
+      rawSlots = cronogramaSlots as BackendSlot[];
+    } else if (Array.isArray(rootSlots)) {
+      rawSlots = rootSlots as BackendSlot[];
+    } else if (Array.isArray(data)) {
+      rawSlots = data as BackendSlot[];
     }
 
-    const frontendSlots: SlotCronograma[] = rawSlots.map((slot) => {
-      const temaCompleto: TemaDeEstudo = slot.tema
-        ? {
-            id: slot.tema.id,
-            tema: slot.tema.tema,
-            cor: slot.tema.cor,
-            descricao: slot.tema.descricao,
-            creatorId: slot.tema.creatorId ?? 0,
-            created_at: slot.tema.created_at ?? new Date().toISOString(),
-            updated_at: slot.tema.updated_at ?? new Date().toISOString(),
-          }
-        : {
-            id: slot.temaId,
-            tema: "Carregando...",
-            cor: "#ccc",
-            creatorId: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
+    const cronogramaId =
+      typeof cronogramaRecord?.["id"] === "number"
+        ? (cronogramaRecord["id"] as number)
+        : 0;
 
-      return {
-        id: slot.id || Math.random(),
-        dia_semana: dayToIdMap[slot.diaSemana] ?? 0,
-        tema_id: slot.temaId,
-        ordem: slot.ordem || 0,
-        tema: temaCompleto,
-        created_at: "",
-        updated_at: "",
-        creatorId: 0,
-        cronograma_id: 0,
+    const frontendSlots: SlotCronograma[] = rawSlots.map((slot) => {
+      // O backend atual retorna tema (com id) mas não retorna temaId no slot.
+      // Para manter o front, derivamos temaId de slot.tema.id quando necessário.
+      const normalizedSlot: BackendSlot = {
+        ...slot,
+        temaId: slot.temaId ?? slot.tema?.id,
       };
+
+      return mapCronogramaSlotFromApi(
+        {
+          id: normalizedSlot.id ?? Math.floor(Math.random() * 1_000_000_000),
+          createdAt: normalizedSlot.createdAt ?? new Date().toISOString(),
+          diaSemana: normalizedSlot.diaSemana,
+          ordem: normalizedSlot.ordem ?? 0,
+          tema: normalizedSlot.tema,
+        },
+        cronogramaId
+      );
     });
 
     return frontendSlots;

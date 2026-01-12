@@ -5,7 +5,10 @@ interface RecentStudiesProps {
   studies: RegistroEstudo[];
 }
 
-export function RecentStudies({ studies }: RecentStudiesProps) {
+export function RecentStudies({
+  studies,
+  onOpenRecord,
+}: RecentStudiesProps & { onOpenRecord?: (id: number) => void }) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 h-fit">
       <div className="flex items-center gap-2 mb-6">
@@ -22,7 +25,8 @@ export function RecentStudies({ studies }: RecentStudiesProps) {
           studies.map((study) => (
             <div
               key={study.id}
-              className="flex justify-between items-start pb-4 border-b border-slate-50 last:border-0 last:pb-0 hover:bg-slate-50/50 transition-colors rounded-lg px-1 -mx-1"
+              onClick={() => onOpenRecord?.(study.id)}
+              className="flex justify-between items-start pb-4 border-b border-slate-50 last:border-0 last:pb-0 hover:bg-slate-50/50 transition-all rounded-lg px-1 -mx-1 cursor-pointer active:scale-95"
             >
               <div className="overflow-hidden mr-4">
                 <p
@@ -43,9 +47,12 @@ export function RecentStudies({ studies }: RecentStudiesProps) {
         )}
       </div>
 
-      <button className="w-full mt-6 text-sm text-slate-500 hover:text-indigo-600 font-medium transition-colors border-t border-transparent hover:border-slate-100 pt-2">
+      <a
+        href="/records"
+        className="w-full mt-6 text-sm text-slate-500 hover:text-indigo-600 font-medium transition-colors border-t border-transparent hover:border-slate-100 pt-2 block text-center"
+      >
         Ver todo o histórico
-      </button>
+      </a>
     </div>
   );
 }

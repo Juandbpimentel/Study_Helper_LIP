@@ -9,9 +9,10 @@ import {
   RotateCcw,
   BookOpen,
   BarChart3,
-  Settings,
   GraduationCap,
   LogOut,
+  FileText,
+  User,
 } from "lucide-react";
 import { useAppContext } from "@/context/app-context";
 
@@ -42,14 +43,14 @@ export function Sidebar() {
       icon: BookOpen,
     },
     {
+      label: "Registros",
+      href: "/records",
+      icon: FileText,
+    },
+    {
       label: "Estatísticas",
       href: "/statistics",
       icon: BarChart3,
-    },
-    {
-      label: "Configurações",
-      href: "/settings",
-      icon: Settings,
     },
   ];
 
@@ -80,7 +81,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm group ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm group cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
                 isActive
                   ? "bg-indigo-50 text-indigo-600"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -102,6 +103,15 @@ export function Sidebar() {
       <div className="p-4 border-t border-slate-100 mt-auto relative">
         {isMenuOpen && (
           <div className="absolute bottom-full left-0 w-[calc(100%-32px)] mx-4 bg-white border border-slate-200 shadow-xl rounded-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <Link
+              href="/profile"
+              onClick={() => setIsMenuOpen(false)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors text-left border-b border-slate-50"
+            >
+              <User className="w-4 h-4 text-slate-400" />
+              Meu Perfil
+            </Link>
+
             <button
               onClick={() => logout()}
               className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-left"

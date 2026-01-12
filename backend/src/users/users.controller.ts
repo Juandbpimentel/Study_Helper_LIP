@@ -9,6 +9,7 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -98,7 +99,8 @@ export class UsersController {
   @Patch(':id')
   updateProfile(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateUserDto: UpdateUserDto,
+    @Body(new ValidationPipe({ skipMissingProperties: true, transform: true }))
+    updateUserDto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<PublicUser> {
     if (req.user.id !== id) {

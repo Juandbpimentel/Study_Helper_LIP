@@ -154,6 +154,11 @@ export class RegistrosController {
     description: 'Registro não encontrado para o usuário autenticado.',
   })
   @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @Delete()
+  async removerTodos(@Req() req: AuthenticatedRequest) {
+    return this.registrosService.deletarTodos(req.user.id);
+  }
+
   @Delete(':id')
   remover(
     @Req() req: AuthenticatedRequest,

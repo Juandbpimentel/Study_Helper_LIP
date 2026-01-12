@@ -56,7 +56,24 @@ export function ReviewCard({
               {review.tema?.tema || "Geral"}
             </span>
             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-              3ª Revisão
+              {(() => {
+                const origin = review.registro_origem?.data_estudo;
+                if (!origin) return "Revisão";
+                try {
+                  const createDate = parseISO(origin);
+                  const revDate = parseISO(review.data_revisao);
+                  const diff = Math.round(
+                    (revDate.getTime() - createDate.getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  );
+                  const defaultIntervals = [1, 7, 14];
+                  const idx = defaultIntervals.indexOf(diff);
+                  if (idx >= 0) return `${idx + 1}ª Revisão`;
+                  return "Revisão";
+                } catch (e) {
+                  return "Revisão";
+                }
+              })()}
             </span>
           </div>
 
@@ -79,8 +96,9 @@ export function ReviewCard({
       <div className="flex items-center gap-3 pl-14 sm:pl-0">
         {!isDone ? (
           <button
+            type="button"
             onClick={() => onComplete(review.id)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-indigo-200"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg transition-transform transform cursor-pointer active:scale-95 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-200 flex items-center gap-2 shadow-lg shadow-indigo-200"
           >
             <CheckCircle2 className="w-5 h-5" />
             Concluir

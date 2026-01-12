@@ -15,7 +15,7 @@ const API_URL = normalizeBaseUrl(
 //   ? "http://localhost:3000/api-proxy"
 //   : process.env.NEXT_PUBLIC_API_URL || "https://study-helper-lip.onrender.com";
 
-interface ApiResponse<T = unknown> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   statusCode?: number;

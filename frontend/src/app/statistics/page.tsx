@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   subDays,
-  isWithinInterval,
   parseISO,
   eachDayOfInterval,
   format,
+  isSameDay,
+  differenceInDays,
+  startOfDay as fnsStartOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Clock, BookOpen, RotateCcw, Target } from "lucide-react";
@@ -15,15 +17,36 @@ import { Revisao, RegistroEstudo, TemaDeEstudo } from "@/types/types";
 
 import { dashboardService } from "@/services/dashboard-service";
 import { subjectService } from "@/services/subject-service";
+import { studyService } from "@/services/study-service";
 
 import { StatCard } from "@/components/ui/StatCard";
-import { StatisticsFilters } from "@/components/statistics/StatisticsFilters";
 import { StatisticsCharts } from "@/components/statistics/StatisticsCharts";
 import { SubjectsTable } from "@/components/statistics/SubjectsTable";
+import { PeriodSelect } from "@/components/ui/PeriodSelect";
 
 export default function StatisticsPage() {
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("7");
+  const [period, setPeriod] = useState(() => {
+    try {
+      return localStorage.getItem("stats_period") ?? "7";
+    } catch {
+      return "7";
+    }
+  });
+  const [periodStart, setPeriodStart] = useState<string | undefined>(() => {
+    try {
+      return localStorage.getItem("stats_period_start") ?? undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const [periodEnd, setPeriodEnd] = useState<string | undefined>(() => {
+    try {
+      return localStorage.getItem("stats_period_end") ?? undefined;
+    } catch {
+      return undefined;
+    }
+  });
 
   const [reviews, setReviews] = useState<Revisao[]>([]);
   const [studyRecords, setStudyRecords] = useState<RegistroEstudo[]>([]);
@@ -50,29 +73,93 @@ export default function StatisticsPage() {
     fetchData();
   }, [fetchData]);
 
-  const periodDays = parseInt(period);
-  const endDate = new Date();
-  const startDate = subDays(endDate, periodDays - 1);
+  useEffect(() => {
+    try {
+      localStorage.setItem("stats_period", period);
+      if (periodStart) localStorage.setItem("stats_period_start", periodStart);
+      else localStorage.removeItem("stats_period_start");
+      if (periodEnd) localStorage.setItem("stats_period_end", periodEnd);
+      else localStorage.removeItem("stats_period_end");
+    } catch {
+      // ignore
+    }
+  }, [period, periodStart, periodEnd]);
 
-  const filteredStudies = studyRecords.filter((s) => {
-    const studyDate = parseISO(s.data_estudo);
-    return isWithinInterval(studyDate, { start: startDate, end: endDate });
-  });
+  function computeRange() {
+    if (period === "custom") {
+      const s = periodStart ? new Date(periodStart) : undefined;
+      const e = periodEnd ? new Date(periodEnd) : undefined;
+      return { start: s, end: e };
+    }
+    if (period === "all") return null;
+    const days = parseInt(period, 10);
+    if (Number.isNaN(days)) return null;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - (days - 1));
+    return { start, end };
+  }
 
-  const filteredReviews = reviews.filter((r) => {
-    const reviewDate = parseISO(r.data_revisao);
-    return (
-      r.status_revisao === "CONCLUIDA" &&
-      isWithinInterval(reviewDate, { start: startDate, end: endDate })
-    );
-  });
+  const range = computeRange();
+
+  function endOfDay(d: Date) {
+    const x = new Date(d);
+    x.setHours(23, 59, 59, 999);
+    return x;
+  }
+
+  function inRange(dateStr: string) {
+    if (!range) return true;
+    const d = new Date(dateStr);
+    if (range.start && d < range.start) return false;
+    if (range.end) {
+      const eod = endOfDay(range.end);
+      if (d > eod) return false;
+    }
+    return true;
+  }
+
+  const now = new Date();
+  const effectiveEndDate = range?.end ? endOfDay(range.end) : endOfDay(now);
+
+  const effectiveStartDate = (() => {
+    if (range?.start) return fnsStartOfDay(range.start);
+    if (range) {
+      // custom com apenas end (ou inválido) -> usa janela padrão de 7 dias
+      return subDays(effectiveEndDate, 6);
+    }
+    // "all": inicia no primeiro registro disponível (fallback hoje)
+    const candidates: number[] = [];
+    for (const s of studyRecords) {
+      const t = new Date(s.data_estudo).getTime();
+      if (!Number.isNaN(t)) candidates.push(t);
+    }
+    for (const r of reviews) {
+      const t = new Date(r.data_revisao).getTime();
+      if (!Number.isNaN(t)) candidates.push(t);
+    }
+    return candidates.length
+      ? new Date(Math.min(...candidates))
+      : subDays(effectiveEndDate, 6);
+  })();
+
+  const periodDays = Math.max(
+    1,
+    differenceInDays(effectiveEndDate, effectiveStartDate) + 1
+  );
+
+  const filteredStudies = studyRecords.filter((s) => inRange(s.data_estudo));
+
+  // Agora filtramos revisões agendadas concluídas OU registros do tipo Revisão
+  const totalReviewsCompleted = studyRecords.filter(
+    (s) => s.tipo_registro === "Revisao" && inRange(s.data_estudo)
+  ).length;
 
   const totalStudyMinutes = filteredStudies.reduce(
     (sum, s) => sum + s.tempo_dedicado,
     0
   );
   const totalStudies = filteredStudies.length;
-  const totalReviewsCompleted = filteredReviews.length;
   const avgStudyTime =
     totalStudies > 0 ? Math.round(totalStudyMinutes / totalStudies) : 0;
 
@@ -85,8 +172,10 @@ export default function StatisticsPage() {
         (sum, s) => sum + s.tempo_dedicado,
         0
       );
-      const subjectReviewsCount = filteredReviews.filter(
-        (r) => r.tema?.id === subject.id
+      const subjectReviewsCount = filteredStudies.filter(
+        (s) =>
+          s.tipo_registro === "Revisao" &&
+          (s.tema_id === subject.id || s.tema?.id === subject.id)
       ).length;
 
       return {
@@ -102,7 +191,10 @@ export default function StatisticsPage() {
     .filter((s) => s.minutes > 0 || s.reviewsCount > 0)
     .sort((a, b) => b.minutes - a.minutes);
 
-  const daysInPeriod = eachDayOfInterval({ start: startDate, end: endDate });
+  const daysInPeriod = eachDayOfInterval({
+    start: effectiveStartDate,
+    end: effectiveEndDate,
+  });
   const dailyData = daysInPeriod.map((day) => {
     const dayStudies = filteredStudies.filter((s) =>
       isSameDay(parseISO(s.data_estudo), day)
@@ -113,14 +205,6 @@ export default function StatisticsPage() {
       estudos: dayStudies.reduce((sum, s) => sum + s.tempo_dedicado, 0),
     };
   });
-
-  function isSameDay(d1: Date, d2: Date) {
-    return (
-      d1.getDate() === d2.getDate() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getFullYear() === d2.getFullYear()
-    );
-  }
 
   if (loading) {
     return (
@@ -142,8 +226,48 @@ export default function StatisticsPage() {
               Acompanhe seu desempenho de estudos
             </p>
           </div>
-          <StatisticsFilters period={period} onChange={setPeriod} />
+          <div className="flex items-center gap-3">
+            <PeriodSelect
+              value={period}
+              startDate={periodStart}
+              endDate={periodEnd}
+              hideCustomInputs
+              onChange={(v) => {
+                setPeriod(v);
+                if (v !== "custom") {
+                  setPeriodStart(undefined);
+                  setPeriodEnd(undefined);
+                }
+              }}
+              onChangeRange={(s, e) => {
+                setPeriodStart(s);
+                setPeriodEnd(e);
+              }}
+            />
+          </div>
         </div>
+
+        {period === "custom" && (
+          <div className="flex justify-end items-center gap-2 mb-8 animate-in fade-in slide-in-from-top-1 duration-200">
+            <input
+              type="date"
+              value={periodStart ?? ""}
+              onChange={(e) => {
+                setPeriodStart(e.target.value);
+              }}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white w-40 outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+            />
+            <span className="text-slate-400 text-sm">até</span>
+            <input
+              type="date"
+              value={periodEnd ?? ""}
+              onChange={(e) => {
+                setPeriodEnd(e.target.value);
+              }}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white w-40 outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
@@ -151,7 +275,9 @@ export default function StatisticsPage() {
             value={`${Math.floor(totalStudyMinutes / 60)}h ${
               totalStudyMinutes % 60
             }m`}
-            subtitle={`em ${periodDays} dias`}
+            subtitle={
+              period === "all" ? "em todo o período" : `em ${periodDays} dias`
+            }
             icon={Clock}
             colorClass="bg-indigo-100 text-indigo-600"
           />

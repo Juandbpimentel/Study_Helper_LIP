@@ -2,6 +2,11 @@ import { AlertCircle, BookOpen, CheckCircle2 } from "lucide-react";
 import { format, isBefore, startOfDay, parseISO } from "date-fns";
 import { Revisao } from "@/types/types";
 import { reviewService } from "@/services/review-service";
+import { studyService } from "@/services/study-service";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
+import { useState } from "react";
+import { ConcludeReviewModal } from "@/components/reviews/ConcludeReviewModal";
+import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
 
 interface ReviewListProps {
   reviews: Revisao[];
@@ -11,17 +16,62 @@ interface ReviewListProps {
 export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
   const today = startOfDay(new Date());
 
-  const handleComplete = async (id: number) => {
+  const [pendingReviewId, setPendingReviewId] = useState<number | null>(null);
+  const [isConcludeModalOpen, setIsConcludeModalOpen] = useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  const openConcludeModal = (id: number) => {
+    setPendingReviewId(id);
+    setIsConcludeModalOpen(true);
+  };
+
+  const handleCompleteDirect = async () => {
+    if (!pendingReviewId) return;
     try {
-      await reviewService.complete(id);
+      // cria registro automático e marca revisão como concluída
+      await studyService.create({
+        tipo_registro: "Revisao",
+        conteudo_estudado: "Concluído (registro automático)",
+        data_estudo: new Date().toISOString(),
+        tempo_dedicado: 0,
+        revisao_programada_id: pendingReviewId,
+      } as any);
+
+      await reviewService.complete(pendingReviewId);
       if (onRefresh) onRefresh();
+      setToast({
+        variant: "success",
+        message: "Revisão concluída e registro criado.",
+      });
     } catch (error) {
-      console.error("Erro ao concluir revisão", error);
+      console.error("Erro ao concluir revisão com registro automático", error);
+      setToast({ variant: "error", message: "Erro ao concluir revisão." });
+    } finally {
+      setIsConcludeModalOpen(false);
+      setPendingReviewId(null);
+      setTimeout(() => setToast(null), 3000);
     }
+  };
+
+  const handleRegister = () => {
+    setIsConcludeModalOpen(false);
+    setIsRegisterModalOpen(true);
+  };
+
+  const handleRegisterSuccess = () => {
+    setIsRegisterModalOpen(false);
+    setPendingReviewId(null);
+    if (onRefresh) onRefresh();
   };
 
   return (
     <div>
+      {toast && (
+        <div className="mb-4">
+          <ToastBanner toast={toast} onClose={() => setToast(null)} />
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-4">
         <AlertCircle className="w-5 h-5 text-orange-500" />
         <h2 className="text-lg font-bold text-slate-800">
@@ -67,8 +117,8 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
                   {dateLabel}
                 </span>
                 <button
-                  onClick={() => handleComplete(review.id)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  onClick={() => openConcludeModal(review.id)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-transform transform cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200 flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Concluir
@@ -78,6 +128,31 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
           );
         })}
       </div>
+
+      <ConcludeReviewModal
+        isOpen={isConcludeModalOpen}
+        onClose={() => {
+          setIsConcludeModalOpen(false);
+          setPendingReviewId(null);
+        }}
+        onRegister={() => handleRegister()}
+        onCompleteWithAutomaticRecord={() => handleCompleteDirect()}
+      />
+
+      <RegisterStudyModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onSuccess={() => handleRegisterSuccess()}
+        initialFormData={
+          pendingReviewId
+            ? {
+                tipo_registro: "Revisao",
+                revisao_programada_id: String(pendingReviewId),
+                data_estudo: new Date().toISOString(),
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

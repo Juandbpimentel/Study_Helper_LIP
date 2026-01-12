@@ -13,14 +13,22 @@ import { scheduleService } from "@/services/schedule-service";
 import { SubjectManager } from "@/components/subjects/SubjectManager";
 import { WeeklySchedule } from "@/components/dashboard/WeeklySchedule";
 import { ScheduleEditor } from "@/components/subjects/ScheduleEditor";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
 
 export default function SubjectsPage() {
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   // 3. USO DOS TIPOS CORRETOS
   const [subjects, setSubjects] = useState<TemaDeEstudo[]>([]);
   const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
   const [showScheduleEditor, setShowScheduleEditor] = useState(false);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -48,9 +56,30 @@ export default function SubjectsPage() {
   const handleCreateSubject = async (data: { tema: string; cor: string }) => {
     try {
       await subjectService.create(data);
+      setToast({ variant: "success", message: "Disciplina criada!" });
       fetchData();
     } catch (error) {
-      alert("Erro ao criar disciplina. Tente novamente.");
+      setToast({
+        variant: "error",
+        message: "Erro ao criar disciplina. Tente novamente.",
+      });
+    }
+  };
+
+  // Ação: Atualizar Disciplina (Via SubjectService)
+  const handleUpdateSubject = async (
+    id: number,
+    data: { tema: string; cor: string }
+  ) => {
+    try {
+      await subjectService.update(id, data);
+      setToast({ variant: "success", message: "Disciplina atualizada!" });
+      fetchData();
+    } catch (error) {
+      setToast({
+        variant: "error",
+        message: "Erro ao atualizar disciplina.",
+      });
     }
   };
 
@@ -62,7 +91,7 @@ export default function SubjectsPage() {
       // Atualização otimista da UI
       setSubjects((prev) => prev.filter((s) => s.id !== id));
     } catch (error) {
-      alert("Erro ao deletar disciplina.");
+      setToast({ variant: "error", message: "Erro ao deletar disciplina." });
     }
   };
 
@@ -76,12 +105,15 @@ export default function SubjectsPage() {
       // Chamada real ao serviço
       await scheduleService.update(newScheduleMap);
 
-      alert("Cronograma salvo com sucesso!");
+      setToast({
+        variant: "success",
+        message: "Cronograma salvo com sucesso!",
+      });
       setShowScheduleEditor(false);
       fetchData();
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar cronograma.");
+      setToast({ variant: "error", message: "Erro ao salvar cronograma." });
     }
   };
 
@@ -95,6 +127,7 @@ export default function SubjectsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 pb-20">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
@@ -109,6 +142,7 @@ export default function SubjectsPage() {
           <SubjectManager
             subjects={subjects}
             onAdd={handleCreateSubject}
+            onUpdate={handleUpdateSubject}
             onDelete={handleDeleteSubject}
           />
 
