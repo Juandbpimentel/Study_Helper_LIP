@@ -1,108 +1,309 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import {
+  Plus,
+  Clock,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  RotateCcw,
+} from "lucide-react";
+import {
+  format,
+  isSameDay,
+  parseISO,
+  isBefore,
+  startOfDay,
+  subDays,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
+
 import { useAppContext } from "@/context/app-context";
 import { authService, Usuario } from "@/lib/auth";
 
+import {
+  Revisao,
+  SlotCronograma,
+  RegistroEstudo,
+  TemaDeEstudo,
+} from "@/types/types";
+
+import { dashboardService } from "@/services/dashboard-service";
+import { scheduleService } from "@/services/schedule-service";
+import { subjectService } from "@/services/subject-service";
+
+import { StatCard } from "@/components/ui/StatCard";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
+import { WeeklySchedule } from "@/components/dashboard/WeeklySchedule";
+import { ReviewList } from "@/components/dashboard/ReviewList";
+import { RecentStudies } from "@/components/dashboard/RecentStudies";
+import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
+import { ScheduleEditor } from "@/components/subjects/ScheduleEditor";
+import { RecordDetailsModal } from "@/components/records/RecordDetailsModal";
+import { studyService } from "@/services/study-service";
+
 export default function DashboardPage() {
   const { user, setUser } = useAppContext();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  const [showScheduleEditor, setShowScheduleEditor] = useState(false);
+
+  const [reviews, setReviews] = useState<Revisao[]>([]);
+  const [schedule, setSchedule] = useState<SlotCronograma[]>([]);
+  const [records, setRecords] = useState<RegistroEstudo[]>([]);
+  const [subjects, setSubjects] = useState<TemaDeEstudo[]>([]);
 
   useEffect(() => {
-    // fallback fetch if context not yet populated
-    if (user) return;
-    authService.getProfile().then((result) => {
-      if (result.error) {
-        setError(result.error);
-        window.location.href = "/login";
-      } else if (result.data) {
-        setUser(result.data as Usuario);
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const [dashboardData, themesRes] = await Promise.all([
+        dashboardService.getDashboardData(),
+        subjectService.getAll(),
+      ]);
+
+      setReviews(dashboardData.reviews);
+      setSchedule(dashboardData.schedule);
+      setRecords(dashboardData.studyRecords);
+      setSubjects(themesRes.data || []);
+    } catch (err) {
+      console.error("Erro ao carregar dashboard:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      if (!user) {
+        try {
+          const profile = await authService.getProfile();
+          if (profile.data) {
+            setUser(profile.data as Usuario);
+            await loadDashboardData();
+          } else {
+            window.location.href = "/login";
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+          window.location.href = "/login";
+          return;
+        }
+      } else {
+        await loadDashboardData();
       }
       setLoading(false);
-    });
-  }, [user, setUser]);
+    }
+
+    init();
+  }, [user, setUser, loadDashboardData]);
+
+  const handleSaveSchedule = async (
+    newScheduleMap: Record<number, number[]>
+  ) => {
+    try {
+      await scheduleService.update(newScheduleMap);
+      setToast({
+        variant: "success",
+        message: "Cronograma atualizado com sucesso!",
+      });
+      setShowScheduleEditor(false);
+      await loadDashboardData();
+    } catch (error) {
+      console.error(error);
+      setToast({ variant: "error", message: "Erro ao salvar cronograma." });
+    }
+  };
+
+  // Record details modal
+  const [selectedRecord, setSelectedRecord] = useState<RegistroEstudo | null>(
+    null
+  );
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+
+  const openRecord = async (id: number) => {
+    try {
+      const res = await studyService.getById(id);
+      if (res.error) {
+        setToast({ variant: "error", message: res.error });
+        return;
+      }
+      setSelectedRecord(res.data || null);
+      setIsRecordModalOpen(true);
+    } catch (err) {
+      console.error("Erro ao buscar registro:", err);
+      setToast({ variant: "error", message: "Erro ao abrir registro." });
+    }
+  };
+
+  const closeRecordModal = () => {
+    setIsRecordModalOpen(false);
+    setSelectedRecord(null);
+  };
+
+  const today = new Date();
+  const todayStart = startOfDay(today);
+
+  const pendingReviews = reviews.filter((r) => {
+    const rDate = parseISO(r.data_revisao);
+    return (
+      r.status_revisao !== "CONCLUIDA" &&
+      (isSameDay(rDate, today) || isBefore(rDate, todayStart))
+    );
+  });
+
+  const completedTodayCount = reviews.filter(
+    (r) =>
+      r.status_revisao === "CONCLUIDA" &&
+      isSameDay(parseISO(r.data_revisao), today)
+  ).length;
+
+  const todayStudies = records.filter((r) =>
+    isSameDay(parseISO(r.data_estudo), today)
+  );
+
+  const totalMinutesToday = todayStudies.reduce(
+    (acc, curr) => acc + curr.tempo_dedicado,
+    0
+  );
+
+  const hours = Math.floor(totalMinutesToday / 60);
+  const minutes = totalMinutesToday % 60;
+
+  const lastWeekStudiesCount = records.filter((r) => {
+    const date = parseISO(r.data_estudo);
+    const weekAgo = subDays(today, 7);
+    return date >= weekAgo;
+  }).length;
+
+  const recentStudiesData = records
+    .sort(
+      (a, b) =>
+        new Date(b.data_estudo).getTime() - new Date(a.data_estudo).getTime()
+    )
+    .slice(0, 5);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Carregando...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-red-600">{error}</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Carregando perfil...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="app-page-surface py-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="ui-card shadow-xl rounded-2xl p-6 sm:p-8 backdrop-blur">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <p className="text-sm uppercase tracking-[0.2em] ui-text-muted">
-                Painel
-              </p>
-              <h1 className="text-3xl font-semibold">Dashboard</h1>
-            </div>
-          </div>
-
-          {user && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm ui-text-muted">Email</p>
-                <p className="text-lg font-semibold">{user.email}</p>
-              </div>
-              {user.nome && (
-                <div>
-                  <p className="text-sm ui-text-muted">Nome</p>
-                  <p className="text-lg font-semibold">{user.nome}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-sm ui-text-muted">ID (sub)</p>
-                <p className="text-lg font-semibold">{user.id}</p>
-              </div>
-              <div>
-                <p className="text-sm ui-text-muted">Primeiro dia da semana</p>
-                <p className="text-lg font-semibold">
-                  {user.primeiroDiaSemana ?? "Não definido"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm ui-text-muted">
-                  Planejamento de revisões
-                </p>
-                <p className="text-lg font-semibold">
-                  {(Array.isArray(user.planejamentoRevisoes)
-                    ? user.planejamentoRevisoes
-                    : []
-                  ).join(", ")}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-8 p-4 rounded-xl ui-badge-positive">
-            <p className="text-sm">
-              ✅ Você está autenticado via Cookie! O token é enviado
-              automaticamente em todas as requisições.
+    <div className="min-h-screen bg-slate-50/50 pb-20">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+              Painel de Estudos
+            </h1>
+            <p className="text-slate-500 mt-1 capitalize">
+              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </p>
           </div>
+          <button
+            onClick={() => setIsStudyModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-indigo-200 transition-transform transform cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-200 flex items-center gap-2 w-full md:w-auto justify-center"
+          >
+            <Plus className="w-5 h-5" />
+            Registrar Estudo
+          </button>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Revisões Pendentes"
+            value={pendingReviews.length}
+            subtitle="para hoje"
+            icon={AlertCircle}
+            colorClass="bg-orange-200 text-orange-600"
+          />
+          <StatCard
+            title="Revisões Concluídas"
+            value={completedTodayCount}
+            subtitle="hoje"
+            icon={CheckCircle2}
+            colorClass="bg-emerald-200 text-emerald-600"
+          />
+          <StatCard
+            title="Tempo de Estudo"
+            value={`${hours}h ${minutes}m`}
+            subtitle="hoje"
+            icon={Clock}
+            colorClass="bg-blue-200 text-blue-600"
+          />
+          <StatCard
+            title="Estudos Realizados"
+            value={lastWeekStudiesCount}
+            subtitle="últimos 7 dias"
+            icon={TrendingUp}
+            colorClass="bg-purple-200 text-purple-600"
+          />
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <WeeklySchedule
+              schedule={schedule}
+              onEdit={() => setShowScheduleEditor(true)}
+            />
+
+            <ReviewList
+              reviews={pendingReviews}
+              onRefresh={loadDashboardData}
+            />
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+              <div className="flex items-center gap-2 mb-6">
+                <RotateCcw className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-semibold text-slate-800">
+                  Próximas Revisões
+                </h3>
+              </div>
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-400">
+                  Nenhuma revisão programada para os próximos dias.
+                </p>
+              </div>
+            </div>
+            <RecentStudies
+              studies={recentStudiesData}
+              onOpenRecord={openRecord}
+            />
+          </div>
+        </div>
+
+        <RegisterStudyModal
+          isOpen={isStudyModalOpen}
+          onClose={() => setIsStudyModalOpen(false)}
+          onSuccess={() => {
+            loadDashboardData();
+          }}
+        />
+
+        <ScheduleEditor
+          isOpen={showScheduleEditor}
+          onClose={() => setShowScheduleEditor(false)}
+          subjects={subjects}
+          currentSchedule={schedule}
+          onSave={handleSaveSchedule}
+        />
+
+        <RecordDetailsModal
+          record={selectedRecord}
+          onClose={closeRecordModal}
+        />
       </div>
     </div>
   );

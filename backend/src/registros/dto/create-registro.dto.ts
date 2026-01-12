@@ -8,6 +8,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { IsNotInFuture } from '@/common/validators/is-not-in-future.validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
@@ -37,6 +38,14 @@ export class CreateRegistroDto {
   conteudoEstudado?: string;
 
   @ApiPropertyOptional({
+    description: 'Anotações adicionais sobre o registro (até 2000 caracteres)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  anotacoes?: string;
+
+  @ApiPropertyOptional({
     description: 'Identificador do tema vinculado ao registro',
   })
   @IsOptional()
@@ -64,6 +73,7 @@ export class CreateRegistroDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsNotInFuture({ message: 'dataEstudo não pode ser no futuro' })
   dataEstudo?: string;
 }
 

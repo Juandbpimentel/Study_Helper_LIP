@@ -5,7 +5,15 @@ import type { MetricsService } from '@/common/services/metrics.service';
 import type { OfensivaService } from '@/ofensiva/ofensiva.service';
 import type { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
 import type { Prisma } from '@prisma/client';
-import { StatusRevisao } from '@prisma/client';
+import { StatusRevisao, TipoRegistro } from '@prisma/client';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
 
 describe('RelatoriosService', () => {
   afterEach(() => {
@@ -17,13 +25,17 @@ describe('RelatoriosService', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-11-13T16:30:00.000Z'));
 
-    const prisma = {} as unknown as PrismaService;
-    const metrics = {} as unknown as MetricsService;
-    const ofensiva = {} as unknown as OfensivaService;
+    const prisma: PrismaService = {} as unknown as PrismaService;
+    const metrics: MetricsService = {} as unknown as MetricsService;
+    const ofensiva: OfensivaService = {} as unknown as OfensivaService;
 
-    const service = new RelatoriosService(prisma, metrics, ofensiva);
+    const service: RelatoriosService = new RelatoriosService(
+      prisma,
+      metrics,
+      ofensiva,
+    );
 
-    jest.spyOn(service, 'resumo').mockResolvedValue({
+    const resumo: Awaited<ReturnType<RelatoriosService['resumo']>> = {
       periodo: { dataInicial: null, dataFinal: null },
       ofensiva: {
         atual: 0,
@@ -37,28 +49,50 @@ describe('RelatoriosService', () => {
       diasComEstudo: 0,
       tempoMedioPorDiaAtivo: 0,
       registrosPorTipo: [],
+      tempoMedioPorEstudo: 0,
+      revisoesConcluidasPorRegistro: 0,
       revisoesConcluidas: 0,
       revisoesPendentes: 0,
       revisoesAtrasadas: 0,
       revisoesExpiradas: 0,
       revisoesHoje: 0,
       desempenhoPorTema: [],
-    } as any);
+      seriesDiaria: [],
+      estudosPorTema: [],
+      periodoDias: 1,
+    };
 
-    const req = await service.buildResumoPdfRequest(1, {
-      dataInicial: '2026-11-01',
-      dataFinal: '2026-11-30',
+    jest.spyOn(service, 'resumo').mockResolvedValue(resumo);
+
+    await Promise.resolve<unknown>(
+      service.buildResumoPdfRequest(1, {
+        dataInicial: '2026-11-01',
+        dataFinal: '2026-11-30',
+      }) as unknown,
+    ).then((reqUnknown) => {
+      if (!isRecord(reqUnknown)) throw new Error('request inválido');
+      const dataUnknown = reqUnknown['data'];
+      if (!isRecord(dataUnknown)) throw new Error('data inválido');
+
+      const secoesRaw = dataUnknown['secoes'];
+      if (!Array.isArray(secoesRaw)) {
+        throw new Error('Seções do PDF não encontradas');
+      }
+
+      const header = secoesRaw.find((secao) => {
+        if (!isRecord(secao)) return false;
+        return secao['componente'] === 'header_corporativo';
+      });
+
+      if (!isRecord(header)) {
+        throw new Error('Seção header_corporativo não encontrada');
+      }
+
+      const referencia = header['referencia'];
+      if (!isString(referencia)) throw new Error('referencia inválida');
+
+      expect(referencia).toBe('1/11/2026 00:00 a 30/11/2026 23:59');
     });
-
-    const secoes = (req as any).data?.secoes as any[] | undefined;
-    if (!secoes) throw new Error('Seções do PDF não encontradas');
-
-    const header = secoes.find(
-      (s: any) => s.componente === 'header_corporativo',
-    );
-    if (!header) throw new Error('Seção header_corporativo não encontrada');
-
-    expect(header.referencia).toBe('1/11/2026 00:00 a 30/11/2026 23:59');
   });
 
   it('resumo: lança BadRequest quando dataInicial é inválida', async () => {
@@ -183,6 +217,24 @@ describe('RelatoriosService', () => {
     const prisma = {
       temaDeEstudo: { findFirst: jest.fn() },
       revisaoProgramada: { count: revisaoCount },
+      registroEstudo: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            tempoDedicado: 30,
+            dataEstudo: new Date('2026-01-05T12:00:00.000Z'),
+            tipoRegistro: TipoRegistro.EstudoDeTema,
+            temaId: 1,
+            tema: { tema: 'Tema A', cor: '#000000' },
+          },
+          {
+            tempoDedicado: 20,
+            dataEstudo: new Date('2026-01-08T10:00:00.000Z'),
+            tipoRegistro: TipoRegistro.Revisao,
+            temaId: 1,
+            tema: { tema: 'Tema A', cor: '#000000' },
+          },
+        ]),
+      },
     } as unknown as PrismaService;
 
     const getRegistroStats = jest
@@ -280,6 +332,11 @@ describe('RelatoriosService', () => {
     expect(result.tempoTotalEstudado).toBe(120);
     expect(result.diasComEstudo).toBe(4);
     expect(result.tempoMedioPorDiaAtivo).toBe(30);
+    expect(result.tempoMedioPorEstudo).toBe(12);
+    expect(result.revisoesConcluidasPorRegistro).toBe(1);
+    expect(result.seriesDiaria.length).toBe(2);
+    expect(result.estudosPorTema[0]?.revisoesConcluidas).toBe(1);
+    expect(result.periodoDias).toBe(4);
     expect(result.revisoesHoje).toBe(3);
     expect(result.revisoesPendentes).toBe(5);
     expect(result.desempenhoPorTema.length).toBe(1);
@@ -304,6 +361,7 @@ describe('RelatoriosService', () => {
     const prisma = {
       temaDeEstudo: { findFirst: jest.fn() },
       revisaoProgramada: { count: revisaoCount },
+      registroEstudo: { findMany: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
 
     const metrics: Pick<

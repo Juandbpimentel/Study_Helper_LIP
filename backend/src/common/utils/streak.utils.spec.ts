@@ -38,7 +38,9 @@ describe('streak.utils', () => {
     ]);
 
     expect(result.atual).toBe(1);
-    expect(result.ultimoDiaAtivo).toBe('2026-01-08T00:00:00.000Z');
+    expect(result.ultimoDiaAtivo).toBe(
+      new Date(2026, 0, 8, 0, 0, 0).toISOString(),
+    );
   });
 
   it('calcularOfensivaPorDiasAtivos: dias consecutivos mantêm sequência sem consumir bloqueios', () => {
@@ -56,7 +58,7 @@ describe('streak.utils', () => {
       bloqueiosTotais: 2,
       bloqueiosUsados: 0,
       bloqueiosRestantes: 2,
-      ultimoDiaAtivo: '2026-01-08T00:00:00.000Z',
+      ultimoDiaAtivo: new Date(2026, 0, 8, 0, 0, 0).toISOString(),
     });
   });
 
@@ -120,16 +122,16 @@ describe('streak.utils', () => {
 
     const result = buildDiasAtivosWindow(
       [
-        iso('2026-01-01T00:00:00.000Z'),
-        iso('2026-01-05T00:00:00.000Z'),
-        iso('2026-01-08T00:00:00.000Z'),
+        new Date(2026, 0, 1, 0, 0, 0),
+        new Date(2026, 0, 5, 0, 0, 0),
+        new Date(2026, 0, 8, 0, 0, 0),
       ],
       3,
     );
 
     expect(result.map((d) => d.toISOString())).toEqual([
-      '2026-01-05T00:00:00.000Z',
-      '2026-01-08T00:00:00.000Z',
+      new Date(2026, 0, 5, 0, 0, 0).toISOString(),
+      new Date(2026, 0, 8, 0, 0, 0).toISOString(),
     ]);
   });
 });

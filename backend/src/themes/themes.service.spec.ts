@@ -16,8 +16,12 @@ describe('ThemesService', () => {
       .fn<Promise<{ id: number }>, [Prisma.TemaDeEstudoCreateArgs]>()
       .mockResolvedValue({ id: 1 });
 
+    const findFirst = jest
+      .fn<Promise<null | { id: number }>, [Prisma.TemaDeEstudoFindFirstArgs]>()
+      .mockResolvedValue(null);
+
     const prisma = {
-      temaDeEstudo: { create },
+      temaDeEstudo: { create, findFirst },
     } as unknown as PrismaService;
 
     const service = new ThemesService(prisma);
@@ -42,6 +46,25 @@ describe('ThemesService', () => {
       cor: '#3366FF',
       creatorId: 7,
     });
+  });
+
+  it('create: lança ConflictException quando já existe tema com mesmo nome (case-insensitive)', async () => {
+    const findFirst = jest
+      .fn<Promise<{ id: number } | null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
+      .mockResolvedValue({ id: 5 });
+
+    const prisma = {
+      temaDeEstudo: { findFirst },
+    } as unknown as PrismaService;
+
+    const service = new ThemesService(prisma);
+
+    const dto: CreateThemeDto = { tema: 'Matemática' };
+
+    await expect(service.create(7, dto)).rejects.toThrow(
+      'Tema com esse nome já existe',
+    );
+    expect(findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('findAll: sem paginação retorna array', async () => {
@@ -124,7 +147,8 @@ describe('ThemesService', () => {
   it('update: valida ownership e atualiza com normalização de cor', async () => {
     const findFirst = jest
       .fn<Promise<{ id: number } | null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
-      .mockResolvedValue({ id: 10 });
+      .mockImplementationOnce(() => Promise.resolve({ id: 10 }))
+      .mockImplementationOnce(() => Promise.resolve(null));
 
     const update = jest
       .fn<Promise<{ id: number }>, [Prisma.TemaDeEstudoUpdateArgs]>()
@@ -141,7 +165,7 @@ describe('ThemesService', () => {
     const result = await service.update(7, 10, dto);
 
     expect(result).toEqual({ id: 10 });
-    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst).toHaveBeenCalledTimes(2);
     expect(update).toHaveBeenCalledTimes(1);
 
     const args = update.mock.calls[0]?.[0];
@@ -152,6 +176,32 @@ describe('ThemesService', () => {
       descricao: undefined,
       cor: '#3366FF',
     });
+  });
+
+  it('update: lança ConflictException quando renomeação causa duplicidade', async () => {
+    // Na primeira chamada de findFirst (ensureOwnership) retornamos { id }
+    // Na segunda chamada (checagem de duplicidade) retornamos um tema conflitante
+    const findFirst = jest
+      .fn<Promise<{ id: number } | null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
+      .mockImplementationOnce(() => Promise.resolve({ id: 10 }))
+      .mockImplementationOnce(() => Promise.resolve({ id: 11 }));
+
+    const update = jest
+      .fn<Promise<{ id: number }>, [Prisma.TemaDeEstudoUpdateArgs]>()
+      .mockResolvedValue({ id: 10 });
+
+    const prisma = {
+      temaDeEstudo: { findFirst, update },
+    } as unknown as PrismaService;
+
+    const service = new ThemesService(prisma);
+
+    const dto: UpdateThemeDto = { tema: 'Duplicado' };
+
+    await expect(service.update(7, 10, dto)).rejects.toThrow(
+      'Tema com esse nome já existe',
+    );
+    expect(findFirst).toHaveBeenCalledTimes(2);
   });
 
   it('remove: quando não pertence lança NotFound', async () => {

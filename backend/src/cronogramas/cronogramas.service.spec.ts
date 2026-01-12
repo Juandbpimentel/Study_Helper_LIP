@@ -5,6 +5,11 @@ import type { GoogleCalendarService } from '@/integrations/google/google-calenda
 import type { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
 import type { DiaSemana, Prisma } from '@prisma/client';
 
+type SlotWithTema = Prisma.SlotCronogramaGetPayload<{
+  include: { tema: true };
+}>;
+type RegistroSlotConclusao = { slotId: number | null; dataEstudo: Date };
+
 describe('CronogramasService', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -34,7 +39,7 @@ describe('CronogramasService', () => {
       });
 
     const slotFindMany = jest
-      .fn<Promise<any[]>, [Prisma.SlotCronogramaFindManyArgs]>()
+      .fn<Promise<SlotWithTema[]>, [Prisma.SlotCronogramaFindManyArgs]>()
       .mockResolvedValue([
         {
           id: 1,
@@ -43,10 +48,13 @@ describe('CronogramasService', () => {
           createdAt: new Date('2026-01-08T14:46:04.101Z'),
           tema: { id: 1, tema: 'IA' },
         },
-      ]);
+      ] as SlotWithTema[]);
 
     const registroFindMany = jest
-      .fn<Promise<any[]>, [Prisma.RegistroEstudoFindManyArgs]>()
+      .fn<
+        Promise<RegistroSlotConclusao[]>,
+        [Prisma.RegistroEstudoFindManyArgs]
+      >()
       .mockResolvedValue([]);
 
     const prisma = {
@@ -72,7 +80,7 @@ describe('CronogramasService', () => {
       '2026-01-08T14:46:04.101Z',
     );
     expect(result.cronograma.slots[0].dataAlvo).toBe(
-      '2026-01-12T00:00:00.000Z',
+      new Date(2026, 0, 12, 0, 0, 0).toISOString(),
     );
     expect(result.cronograma.slots[0].status).toBe('pendente');
   });
@@ -110,6 +118,97 @@ describe('CronogramasService', () => {
     await expect(service.upsert(1, dto)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('ensureCronograma: trata P2002 e retorna cronograma existente em caso de race', async () => {
+    const cronogramaFindUnique = jest
+      .fn<
+        Promise<{ id: number; creatorId: number } | null>,
+        [Prisma.CronogramaSemanalFindUniqueArgs]
+      >()
+      .mockResolvedValueOnce(null)
+      .mockImplementation(() => Promise.resolve({ id: 99, creatorId: 5 }));
+
+    const cronogramaCreate = jest
+      .fn<Promise<{ id: number }>, [Prisma.CronogramaSemanalCreateArgs]>()
+      .mockRejectedValueOnce({
+        code: 'P2002',
+        meta: { constraint: { fields: ['creatorId'] } },
+      });
+
+    const usuarioFindUnique = jest
+      .fn<
+        Promise<{
+          primeiroDiaSemana: DiaSemana;
+          slotAtrasoToleranciaDias: number;
+          slotAtrasoMaxDias: number;
+          maxSlotsPorDia: number | null;
+        } | null>,
+        [Prisma.UsuarioFindUniqueArgs]
+      >()
+      .mockResolvedValue({
+        primeiroDiaSemana: 'Dom' as DiaSemana,
+        slotAtrasoToleranciaDias: 0,
+        slotAtrasoMaxDias: 7,
+        maxSlotsPorDia: null,
+      });
+
+    const txSlotFindMany = jest.fn().mockResolvedValue([]);
+    const txSlotUpdate = jest.fn().mockResolvedValue({});
+    const txSlotCreate = jest.fn().mockResolvedValue({});
+    const txSlotDeleteMany = jest.fn().mockResolvedValue({});
+
+    const prisma = {
+      cronogramaSemanal: {
+        findUnique: cronogramaFindUnique,
+        create: cronogramaCreate,
+      },
+      usuario: { findUnique: usuarioFindUnique },
+      slotCronograma: { findMany: jest.fn().mockResolvedValue([]) },
+      registroEstudo: { findMany: jest.fn().mockResolvedValue([]) },
+      $Transaction: undefined,
+      $transaction: jest.fn(
+        (
+          cb: (
+            tx: Pick<Prisma.TransactionClient, 'slotCronograma'>,
+          ) => Promise<unknown>,
+        ) =>
+          cb({
+            slotCronograma: {
+              findMany: txSlotFindMany,
+              update: txSlotUpdate,
+              create: txSlotCreate,
+              deleteMany: txSlotDeleteMany,
+            },
+          } as unknown as Pick<Prisma.TransactionClient, 'slotCronograma'>),
+      ),
+    } as unknown as PrismaService;
+
+    const deleteSlotEventsByEventIds = jest.fn().mockResolvedValue(undefined);
+    const syncSlotsForUser = jest.fn().mockResolvedValue(undefined);
+
+    const googleCalendar: Pick<
+      GoogleCalendarService,
+      'deleteSlotEventsByEventIds' | 'syncSlotsForUser'
+    > = {
+      deleteSlotEventsByEventIds,
+      syncSlotsForUser,
+    };
+
+    const service = new CronogramasService(
+      prisma,
+      googleCalendar as unknown as GoogleCalendarService,
+    );
+
+    const dto: UpsertCronogramaDto = { slots: [] };
+
+    const result = await service.upsert(5, dto);
+
+    // Se o ensureCronograma tratou o P2002 e retornou o existente, o upsert deve prosseguir e retornar o cronograma final
+    expect(result).toBeDefined();
+    expect(cronogramaCreate).toHaveBeenCalledTimes(1);
+    // 1) initial findUnique, 2) findUnique in catch, 3) ensureCronograma called again inside obterCronogramaComStatus
+    expect(cronogramaFindUnique).toHaveBeenCalledTimes(3);
   });
 
   it('upsert: respeita maxSlotsPorDia e lança BadRequest se exceder', async () => {
@@ -234,12 +333,26 @@ describe('CronogramasService', () => {
       .fn<Promise<unknown>, [Prisma.SlotCronogramaDeleteManyArgs]>()
       .mockResolvedValue({});
 
+    const txRevisaoUpdateMany = jest
+      .fn<Promise<unknown>, [Prisma.RevisaoProgramadaUpdateManyArgs]>()
+      .mockResolvedValue({});
+
+    const txRegistroUpdateMany = jest
+      .fn<Promise<unknown>, [Prisma.RegistroEstudoUpdateManyArgs]>()
+      .mockResolvedValue({});
+
     type TxClient = {
       slotCronograma: {
         findMany: typeof txSlotFindMany;
         update: typeof txSlotUpdate;
         create: typeof txSlotCreate;
         deleteMany: typeof txSlotDeleteMany;
+      };
+      revisaoProgramada: {
+        updateMany: typeof txRevisaoUpdateMany;
+      };
+      registroEstudo: {
+        updateMany: typeof txRegistroUpdateMany;
       };
     };
 
@@ -249,6 +362,12 @@ describe('CronogramasService', () => {
         update: txSlotUpdate,
         create: txSlotCreate,
         deleteMany: txSlotDeleteMany,
+      },
+      revisaoProgramada: {
+        updateMany: txRevisaoUpdateMany,
+      },
+      registroEstudo: {
+        updateMany: txRegistroUpdateMany,
       },
     };
 
@@ -320,6 +439,8 @@ describe('CronogramasService', () => {
     expect(txSlotUpdate).toHaveBeenCalledTimes(1);
     expect(txSlotCreate).toHaveBeenCalledTimes(1);
     expect(txSlotDeleteMany).toHaveBeenCalledTimes(1);
+    expect(txRevisaoUpdateMany).toHaveBeenCalledTimes(1);
+    expect(txRegistroUpdateMany).toHaveBeenCalledTimes(1);
 
     expect(deleteSlotEventsByEventIds).toHaveBeenCalledTimes(1);
     expect(deleteSlotEventsByEventIds).toHaveBeenCalledWith(1, ['e-remove']);

@@ -33,6 +33,7 @@ import {
   RevisaoProgramadaBasicaResponseDto,
   RevisaoProgramadaDetalhadaResponseDto,
 } from './dto/revisao-response.dto';
+import { RevisaoNotificationResponseDto } from './dto/revisao-notification.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiTags('Revisões Programadas')
@@ -187,5 +188,20 @@ export class RevisoesController {
     @Body() dto: AdiarRevisaoDto,
   ) {
     return this.revisoesService.adiar(req.user.id, id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Notificações de revisões',
+    description:
+      'Lista notificações derivadas das revisões programadas: atrasadas, expiradas, do dia e próximas 48h.',
+  })
+  @ApiOkResponse({
+    description: 'Notificações retornadas com sucesso.',
+    type: RevisaoNotificationResponseDto,
+    isArray: true,
+  })
+  @Get('notificacoes')
+  notificacoes(@Req() req: AuthenticatedRequest) {
+    return this.revisoesService.listarNotificacoes(req.user.id);
   }
 }

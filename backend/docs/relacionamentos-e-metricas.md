@@ -129,8 +129,9 @@ No Prisma, para grouping por dia você provavelmente usará `queryRaw` ou manter
   - Atualiza automaticamente os status (`Pendente`, `Adiada`, `Atrasada`) conforme a data-alvo.
   - `PATCH /:id/concluir` reutiliza o fluxo de registros para criar o estudo de revisão.
   - `PATCH /:id/adiar` normaliza e grava a nova data como `Adiada`.
-- **Relatórios (`/relatorios/resumo`)**
-  - Entrega métricas básicas: total de estudos, tempo acumulado, revisões concluídas/pendentes/atrasadas, revisões do dia e top temas.
+- **Relatórios (`/relatorios/resumo` e `/relatorios/resumo/pdf`)**
+  - Entrega as mesmas métricas da tela de Estatísticas: tempo total e médio por estudo, total de estudos, revisões concluídas (registros) e status das programadas (pendentes/atrasadas/expiradas), ofensiva, revisões do dia, séries diárias de minutos e tempo por tema.
+  - A versão em PDF replica esses dados e gráficos (tempo por dia, registros por tipo, tempo por tema) para manter paridade visual com o frontend.
 
 ---
 

@@ -47,6 +47,16 @@ src/
     FRONTEND_URL=http://localhost:3000
     ```
 
+    Variáveis opcionais para **tuning do pool/timeout** do PostgreSQL (pg pool via Prisma adapter):
+
+    ```env
+    # Prisma/PG Pool
+    PRISMA_POOL_MAX=20
+    PRISMA_CONNECTION_TIMEOUT_MS=5000
+    PRISMA_IDLE_TIMEOUT_MS=30000
+    PRISMA_STATEMENT_TIMEOUT_MS=15000
+    ```
+
     Se for usar a integração com **Google Calendar**, adicione também:
 
     ```env
@@ -128,9 +138,9 @@ npx prisma studio
 
 ### Rotas
 
-- `GET /integrations/google/oauth/start` (requer login/cookie JWT): inicia o consentimento e redireciona para o Google
+- `GET /integrations/google/oauth/start` (requer login/JWT Bearer): inicia o consentimento e redireciona para o Google
 - `GET /integrations/google/oauth/callback`: endpoint de retorno do Google (troca code por token + sync)
-- `DELETE /integrations/google/disconnect` (requer login/cookie JWT): remove a integração salva
+- `DELETE /integrations/google/disconnect` (requer login/JWT Bearer): remove a integração salva
 
 ### Chave GOOGLE_TOKEN_ENCRYPTION_KEY
 

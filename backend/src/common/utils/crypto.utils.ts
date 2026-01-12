@@ -11,7 +11,6 @@ function readKeyFromEnv(): Buffer {
     );
   }
 
-  // Accept base64 (recommended) or hex.
   const isLikelyBase64 = /[^0-9a-f]/i.test(raw);
   const buf = Buffer.from(raw, isLikelyBase64 ? 'base64' : 'hex');
   if (buf.length !== 32) {

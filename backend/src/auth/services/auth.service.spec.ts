@@ -2,7 +2,7 @@ import { AuthService } from './auth.service';
 import { UsersService } from '@/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
-import { AUTH_COOKIE_NAME } from '@/auth/auth.constants';
+import { AUTH_ACCESS_TOKEN_FIELD } from '@/auth/auth.constants';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from '@/auth/dtos/create-user.dto';
 import { LoginRequestDto } from '@/auth/dtos/login-request.dto';
@@ -72,7 +72,7 @@ describe('AuthService', () => {
 
       const result = await service.login(dto);
 
-      expect(result[AUTH_COOKIE_NAME]).toBe('signed-jwt');
+      expect(result[AUTH_ACCESS_TOKEN_FIELD]).toBe('signed-jwt');
       expect(result.user).toEqual({
         id: baseUser.id,
         email: baseUser.email,
@@ -108,7 +108,7 @@ describe('AuthService', () => {
     it('deve assinar o token usando o usuário já autenticado', () => {
       const result = service.loginFromGuard(baseUser);
 
-      expect(result[AUTH_COOKIE_NAME]).toBe('signed-jwt');
+      expect(result[AUTH_ACCESS_TOKEN_FIELD]).toBe('signed-jwt');
       expect(result.user.email).toBe(baseUser.email);
       expect(jwtServiceMock.sign).toHaveBeenCalledTimes(1);
     });
@@ -135,7 +135,7 @@ describe('AuthService', () => {
         senha: 'hashed-pass',
       });
       expect(result).toEqual({
-        [AUTH_COOKIE_NAME]: 'signed-jwt',
+        [AUTH_ACCESS_TOKEN_FIELD]: 'signed-jwt',
         user: {
           id: createdUser.id,
           email: createdUser.email,

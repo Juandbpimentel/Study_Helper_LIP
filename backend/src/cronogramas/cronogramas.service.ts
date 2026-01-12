@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import { UpsertCronogramaDto } from './dto/upsert-cronograma.dto';
@@ -55,8 +59,6 @@ export class CronogramasService {
 
     const slotIds = slots.map((slot) => slot.id);
 
-    // Buscamos registros numa janela ampliada para conseguir avaliar a conclusão do slot
-    // mesmo quando a próxima ocorrência cai na semana seguinte.
     const janelaInicio = addDays(inicioSemana, -7);
     const janelaFim = addDays(fimSemana, 7);
     const registros = slotIds.length
@@ -79,8 +81,6 @@ export class CronogramasService {
       registrosPorSlot.set(registro.slotId, list);
     }
 
-    // Importante: usamos a referência como "hoje" para permitir consultar semanas passadas/futuras
-    // sem depender do relógio atual do servidor.
     const hoje = startOfDay(referenciaDate);
 
     const slotsFormatados = slots.map((slot) => {
@@ -91,13 +91,8 @@ export class CronogramasService {
 
       const criadoEm = startOfDay(slot.createdAt);
 
-      // Data prevista para este slot dentro da semana consultada.
-      // OBS: não pode ser anterior à criação do slot.
       const dataPrevistaSemana = addDays(inicioSemana, offset);
 
-      // Determina a data-alvo do ciclo (ocorrência "atual"):
-      // - se a ocorrência da semana é anterior à criação, pula para a primeira ocorrência >= criadoEm
-      // - senão, usa a ocorrência da semana (mesmo que seja no passado, para permitir status atrasado)
       let dataAlvoCiclo = dataPrevistaSemana;
 
       if (dataAlvoCiclo < criadoEm) {
@@ -109,13 +104,10 @@ export class CronogramasService {
         if (dataAlvoCiclo < criadoEm) dataAlvoCiclo = addDays(dataAlvoCiclo, 7);
       }
 
-      // Ciclo semanal associado a essa ocorrência: [dataAlvoCiclo, dataAlvoCiclo+7)
-      // Isso permite concluir "atrasado" (ex.: quinta para slot de segunda).
       let cicloInicio = dataAlvoCiclo;
       const cicloFim = addDays(dataAlvoCiclo, 7);
       if (cicloInicio < criadoEm) cicloInicio = criadoEm;
 
-      // Considera concluído se houver registro dentro do ciclo.
       const registrosDoSlot = registrosPorSlot.get(slot.id) ?? [];
       const concluidoNoCiclo = registrosDoSlot.some(
         (d) => d >= cicloInicio && d < cicloFim,
@@ -133,7 +125,6 @@ export class CronogramasService {
 
       if (concluidoNoCiclo) {
         status = SLOT_STATUS.CONCLUIDO;
-        // Se já concluiu o ciclo, a próxima ocorrência relevante é a próxima semana.
         dataAlvoExibida = addDays(dataAlvoCiclo, 7);
         if (dataAlvoExibida < hoje) {
           while (dataAlvoExibida < hoje)
@@ -145,7 +136,6 @@ export class CronogramasService {
       ) {
         status = SLOT_STATUS.ATRASADO;
       } else if (diasAposVencimento > maxOverdueDays) {
-        // Após expirar a janela de atraso, volta a pendente e aponta para a próxima ocorrência.
         while (dataAlvoExibida < hoje)
           dataAlvoExibida = addDays(dataAlvoExibida, 7);
       }
@@ -261,13 +251,23 @@ export class CronogramasService {
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
       if (idsParaRemover.length) {
+        await tx.revisaoProgramada.updateMany({
+          where: {
+            creatorId: usuarioId,
+            slotCronogramaId: { in: idsParaRemover },
+          },
+          data: { slotCronogramaId: null },
+        });
+        await tx.registroEstudo.updateMany({
+          where: { creatorId: usuarioId, slotId: { in: idsParaRemover } },
+          data: { slotId: null },
+        });
         await tx.slotCronograma.deleteMany({
           where: { id: { in: idsParaRemover } },
         });
       }
     });
 
-    // Fora da transação: chamadas externas para deletar eventos removidos.
     if (eventIdsParaRemover.length) {
       await this.googleCalendar.deleteSlotEventsByEventIds(
         usuarioId,
@@ -275,7 +275,6 @@ export class CronogramasService {
       );
     }
 
-    // Sync incremental (upsert/ajustes) para slots existentes.
     await this.googleCalendar.syncSlotsForUser(usuarioId);
 
     return await this.obterCronogramaComStatus(usuarioId);
@@ -289,14 +288,14 @@ export class CronogramasService {
     if (!slot) throw new NotFoundException('Slot não encontrado');
 
     await this.prisma.$transaction(async (tx) => {
-      // Remover dependências que podem bloquear a deleção do slot.
-      await tx.revisaoProgramada.deleteMany({
+      await tx.revisaoProgramada.updateMany({
         where: { creatorId: usuarioId, slotCronogramaId: slotId },
+        data: { slotCronogramaId: null },
       });
-      await tx.registroEstudo.deleteMany({
+      await tx.registroEstudo.updateMany({
         where: { creatorId: usuarioId, slotId },
+        data: { slotId: null },
       });
-
       await tx.slotCronograma.delete({ where: { id: slotId } });
     });
 
@@ -316,8 +315,25 @@ export class CronogramasService {
       where: { creatorId: usuarioId },
     });
     if (existente) return existente;
-    return await this.prisma.cronogramaSemanal.create({
-      data: { creatorId: usuarioId },
-    });
+
+    try {
+      return await this.prisma.cronogramaSemanal.create({
+        data: { creatorId: usuarioId },
+      });
+    } catch (err) {
+      if (isPrismaP2002(err)) {
+        const fields = getPrismaConstraintFields(err);
+        if (Array.isArray(fields) && fields.includes('creatorId')) {
+          const existing = await this.prisma.cronogramaSemanal.findUnique({
+            where: { creatorId: usuarioId },
+          });
+          if (existing) return existing;
+        }
+        throw new BadRequestException(
+          'Violação de unicidade no banco de dados',
+        );
+      }
+      throw err;
+    }
   }
 }

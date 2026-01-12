@@ -9,6 +9,11 @@ import { GoogleCalendarService } from '@/integrations/google/google-calendar.ser
 import { CreateUserDto } from '@/auth/dtos/create-user.dto';
 import { UpdateUserDto } from '@/users/dto/update-user.dto';
 import { Prisma, Usuario } from '@prisma/client';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+  buildUniqueViolationMessage,
+} from '@/common/utils/prisma.utils';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { UpdateUserPreferencesDto } from './dto/update-user-preferences.dto';
@@ -20,6 +25,7 @@ const publicUserSelect = {
   versaoToken: true,
   primeiroDiaSemana: true,
   planejamentoRevisoes: true,
+  metaDiaria: true,
   maxSlotsPorDia: true,
   slotAtrasoToleranciaDias: true,
   slotAtrasoMaxDias: true,
@@ -45,6 +51,7 @@ export type PublicUser = Pick<
   | 'versaoToken'
   | 'primeiroDiaSemana'
   | 'planejamentoRevisoes'
+  | 'metaDiaria'
   | 'maxSlotsPorDia'
   | 'slotAtrasoToleranciaDias'
   | 'slotAtrasoMaxDias'
@@ -75,9 +82,29 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<Usuario> {
     const email = this.normalizeEmail(createUserDto.email);
-    return await this.prisma.usuario.create({
-      data: { ...createUserDto, email },
+
+    // Pre-check de unicidade (evita depender do erro P2002 para feedback ao cliente).
+    const existing = await this.prisma.usuario.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
     });
+    if (existing) {
+      throw new BadRequestException(
+        'A propriedade email deve ser única e está duplicada',
+      );
+    }
+
+    try {
+      return await this.prisma.usuario.create({
+        data: { ...createUserDto, email },
+      });
+    } catch (err) {
+      if (isPrismaP2002(err)) {
+        const fields = getPrismaConstraintFields(err);
+        throw new BadRequestException(buildUniqueViolationMessage(fields));
+      }
+      throw err;
+    }
   }
 
   async findOne(id: number): Promise<Usuario | null> {
@@ -160,9 +187,18 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<Usuario> {
+    const data: Prisma.UsuarioUpdateInput = {} as Prisma.UsuarioUpdateInput;
+    if (updateUserDto.nome !== undefined) data.nome = updateUserDto.nome;
+    if (updateUserDto.planejamentoRevisoes !== undefined)
+      data.planejamentoRevisoes = updateUserDto.planejamentoRevisoes as any;
+    if (updateUserDto.primeiroDiaSemana !== undefined)
+      data.primeiroDiaSemana = updateUserDto.primeiroDiaSemana as any;
+    if (updateUserDto.metaDiaria !== undefined)
+      data.metaDiaria = updateUserDto.metaDiaria as any;
+
     return await this.prisma.usuario.update({
       where: { id },
-      data: updateUserDto,
+      data,
     });
   }
 
@@ -170,9 +206,18 @@ export class UsersService {
     id: number,
     updateUserDto: UpdateUserDto,
   ): Promise<PublicUser> {
+    const data: Prisma.UsuarioUpdateInput = {} as Prisma.UsuarioUpdateInput;
+    if (updateUserDto.nome !== undefined) data.nome = updateUserDto.nome;
+    if (updateUserDto.planejamentoRevisoes !== undefined)
+      data.planejamentoRevisoes = updateUserDto.planejamentoRevisoes as any;
+    if (updateUserDto.primeiroDiaSemana !== undefined)
+      data.primeiroDiaSemana = updateUserDto.primeiroDiaSemana as any;
+    if (updateUserDto.metaDiaria !== undefined)
+      data.metaDiaria = updateUserDto.metaDiaria as any;
+
     return await this.prisma.usuario.update({
       where: { id },
-      data: updateUserDto,
+      data,
       select: publicUserSelect,
     });
   }

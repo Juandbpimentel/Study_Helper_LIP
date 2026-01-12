@@ -106,6 +106,57 @@ describe('RegistrosService', () => {
     });
   });
 
+  it('buscarPorId: retorna registro quando existe', async () => {
+    const registro = { id: 42, tempoDedicado: 20 };
+
+    const findFirst = jest
+      .fn<
+        Promise<typeof registro | null>,
+        [Prisma.RegistroEstudoFindFirstArgs]
+      >()
+      .mockResolvedValue(registro);
+
+    const prisma = {
+      registroEstudo: { findFirst },
+    } as unknown as PrismaService;
+
+    const googleCalendar = {} as unknown as GoogleCalendarService;
+    const ofensiva = {} as unknown as OfensivaService;
+
+    const service = new RegistrosService(prisma, googleCalendar, ofensiva);
+
+    const result = await service.buscarPorId(7, 42);
+
+    expect(result).toBe(registro);
+    expect(findFirst).toHaveBeenCalledTimes(1);
+
+    const args = findFirst.mock.calls[0]?.[0];
+    if (!args) throw new Error('registroEstudo.findFirst não foi chamado');
+    expect(args.where).toMatchObject({ id: 42, creatorId: 7 });
+    expect(args.include).toBeDefined();
+  });
+
+  it('buscarPorId: lança NotFound quando registro não existe', async () => {
+    const findFirst = jest
+      .fn<Promise<null>, [Prisma.RegistroEstudoFindFirstArgs]>()
+      .mockResolvedValue(null);
+
+    const prisma = {
+      registroEstudo: { findFirst },
+    } as unknown as PrismaService;
+
+    const service = new RegistrosService(
+      prisma,
+      {} as unknown as GoogleCalendarService,
+      {} as unknown as OfensivaService,
+    );
+
+    await expect(service.buscarPorId(5, 999)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(findFirst).toHaveBeenCalledTimes(1);
+  });
+
   it('criar: após tx sincroniza revisões criadas e atualiza ofensiva', async () => {
     const registro = { id: 123 };
 
@@ -136,11 +187,12 @@ describe('RegistrosService', () => {
       syncRevisionById,
     };
 
-    const recalcularEAtualizar = jest
-      .fn<ReturnType<OfensivaService['recalcularEAtualizar']>, [number]>()
-      .mockResolvedValue(
-        {} as Awaited<ReturnType<OfensivaService['recalcularEAtualizar']>>,
-      );
+    const recalcularEAtualizar = jest.fn() as jest.MockedFunction<
+      OfensivaService['recalcularEAtualizar']
+    >;
+    recalcularEAtualizar.mockResolvedValue(
+      {} as Awaited<ReturnType<OfensivaService['recalcularEAtualizar']>>,
+    );
 
     const ofensiva: Pick<OfensivaService, 'recalcularEAtualizar'> = {
       recalcularEAtualizar,
@@ -313,6 +365,65 @@ describe('RegistrosService', () => {
     });
   });
 
+  it('criarComTx: se update de revisão falhar por P2002 deve lançar BadRequest', async () => {
+    const revisao = {
+      id: 123,
+      statusRevisao: StatusRevisao.Pendente,
+      registroOrigem: { temaId: 42 },
+    };
+
+    const tx = {
+      temaDeEstudo: {
+        findFirst: jest
+          .fn<Promise<null>, [Prisma.TemaDeEstudoFindFirstArgs]>()
+          .mockResolvedValue(null),
+      },
+      slotCronograma: {
+        findFirst: jest
+          .fn<Promise<null>, [Prisma.SlotCronogramaFindFirstArgs]>()
+          .mockResolvedValue(null),
+      },
+      revisaoProgramada: {
+        findFirst: jest
+          .fn<
+            Promise<typeof revisao | null>,
+            [Prisma.RevisaoProgramadaFindFirstArgs]
+          >()
+          .mockResolvedValue(revisao),
+        update: jest
+          .fn<Promise<unknown>, [Prisma.RevisaoProgramadaUpdateArgs]>()
+          .mockRejectedValue({
+            code: 'P2002',
+            meta: { constraint: { fields: ['registro_conclusao_id'] } },
+          }),
+      },
+      registroEstudo: {
+        create: jest
+          .fn<
+            Promise<{ id: number; slotId: number | null }>,
+            [Prisma.RegistroEstudoCreateArgs]
+          >()
+          .mockResolvedValue({ id: 200, slotId: null }),
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    const service = new RegistrosService(
+      {} as unknown as PrismaService,
+      {} as unknown as GoogleCalendarService,
+      {} as unknown as OfensivaService,
+    );
+
+    const dto: CreateRegistroDto = {
+      tipoRegistro: TipoRegistro.Revisao,
+      tempoDedicado: 10,
+      revisaoProgramadaId: 123,
+    };
+
+    await expect(service.criarComTx(tx, 1, dto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
   it('criarComTx: Revisao já concluída lança BadRequest', async () => {
     const revisao = {
       id: 77,
@@ -460,9 +571,12 @@ describe('RegistrosService', () => {
       syncRevisionById,
     };
 
-    const recalcularEAtualizar = jest
-      .fn<Promise<unknown>, [number]>()
-      .mockResolvedValue({});
+    const recalcularEAtualizar = jest.fn() as jest.MockedFunction<
+      OfensivaService['recalcularEAtualizar']
+    >;
+    recalcularEAtualizar.mockResolvedValue(
+      {} as Awaited<ReturnType<OfensivaService['recalcularEAtualizar']>>,
+    );
 
     const ofensiva: Pick<OfensivaService, 'recalcularEAtualizar'> = {
       recalcularEAtualizar,

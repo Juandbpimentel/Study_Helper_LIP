@@ -1,8 +1,21 @@
 import axios, { AxiosInstance, AxiosError } from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { clearAccessToken, getAccessToken } from "./token";
 
-interface ApiResponse<T = unknown> {
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/g, "");
+
+const API_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+);
+// const isLocal =
+//   typeof window !== "undefined" && window.location.hostname === "localhost";
+
+// // Se for local, aponta para "/api-proxy", senão tenta pegar a env var ou usa a URL direta(apagar dps)
+// const API_URL = isLocal
+//   ? "http://localhost:3000/api-proxy"
+//   : process.env.NEXT_PUBLIC_API_URL || "https://study-helper-lip.onrender.com";
+
+export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   statusCode?: number;
@@ -14,10 +27,21 @@ class ApiClient {
   constructor(baseUrl: string) {
     this.client = axios.create({
       baseURL: baseUrl,
-      withCredentials: true, // CRÍTICO: Envia cookies automaticamente
+      // Token-only (Bearer). Cookies não são necessárias.
+      withCredentials: false,
       headers: {
         "Content-Type": "application/json",
       },
+    });
+
+    // Interceptor para anexar Authorization: Bearer <token>
+    this.client.interceptors.request.use((config) => {
+      const token = getAccessToken();
+      if (token) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
     });
 
     // Interceptor para tratamento de erros
@@ -38,6 +62,7 @@ class ApiClient {
         const isHomeRoute = currentPath === "/";
 
         if (status === 401 && !shouldSkipRedirect && currentPath) {
+          clearAccessToken();
           // Token inválido/expirado - redireciona para login, exceto em rotas públicas
           if (!isAuthRoute && !isHomeRoute) {
             window.location.href = "/login";

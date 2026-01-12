@@ -3,6 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  isPrismaP2002,
+  getPrismaConstraintFields,
+} from '@/common/utils/prisma.utils';
 import { PrismaService } from '@/prisma/prisma.service';
 import { GoogleCalendarService } from '@/integrations/google/google-calendar.service';
 import {
@@ -79,6 +83,26 @@ export class RegistrosService {
       items,
       meta: buildMeta({ total, page, pageSize }),
     };
+  }
+
+  async buscarPorId(usuarioId: number, registroId: number) {
+    const registro = await this.prisma.registroEstudo.findFirst({
+      where: { id: registroId, creatorId: usuarioId },
+      include: {
+        tema: true,
+        slotCronograma: {
+          include: { tema: true },
+        },
+        revisoesGeradas: true,
+        revisaoConcluida: true,
+      },
+    });
+    if (!registro) {
+      throw new NotFoundException(
+        'Registro de estudo não encontrado para o usuário',
+      );
+    }
+    return registro;
   }
 
   async criar(usuarioId: number, dto: CreateRegistroDto) {
@@ -165,6 +189,58 @@ export class RegistrosService {
     return removido;
   }
 
+  async deletarTodos(usuarioId: number) {
+    // Busca ids dos registros do usuário e eventIds de revisoes geradas
+    const registros = await this.prisma.registroEstudo.findMany({
+      where: { creatorId: usuarioId },
+      select: {
+        id: true,
+        revisoesGeradas: { select: { googleEventId: true } },
+      },
+    });
+
+    const registroIds = registros.map((r) => r.id);
+
+    if (!registroIds.length) return { deleted: 0 };
+
+    const eventIds = registros
+      .flatMap((r) => r.revisoesGeradas?.map((g) => g.googleEventId) ?? [])
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    // Se houver revisões concluídas por esses registros, reabre-as
+    const revisoesConcluidas = await this.prisma.revisaoProgramada.findMany({
+      where: { creatorId: usuarioId, registroConclusaoId: { in: registroIds } },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      if (revisoesConcluidas.length) {
+        await tx.revisaoProgramada.updateMany({
+          where: { id: { in: revisoesConcluidas.map((r) => r.id) } },
+          data: {
+            registroConclusaoId: null,
+            statusRevisao: StatusRevisao.Pendente,
+          },
+        });
+      }
+
+      await tx.registroEstudo.deleteMany({
+        where: { id: { in: registroIds } },
+      });
+    });
+
+    if (eventIds.length) {
+      await this.googleCalendar.deleteRevisionEventsByEventIds(
+        usuarioId,
+        eventIds,
+      );
+    }
+
+    void this.ofensivaService.recalcularEAtualizar(usuarioId);
+
+    return { deleted: registroIds.length };
+  }
+
   async criarComTx(
     tx: Prisma.TransactionClient,
     usuarioId: number,
@@ -199,6 +275,7 @@ export class RegistrosService {
         temaId: temaIdFinal ?? null,
         slotId: slot?.id ?? null,
         creatorId: usuarioId,
+        anotacoes: dto.anotacoes?.trim() ?? null,
       },
       include: {
         tema: true,
@@ -221,13 +298,32 @@ export class RegistrosService {
     }
 
     if (dto.tipoRegistro === TipoRegistro.Revisao && revisao) {
-      await tx.revisaoProgramada.update({
-        where: { id: revisao.id },
-        data: {
-          statusRevisao: StatusRevisao.Concluida,
-          registroConclusaoId: registro.id,
-        },
-      });
+      try {
+        await tx.revisaoProgramada.update({
+          where: { id: revisao.id },
+          data: {
+            statusRevisao: StatusRevisao.Concluida,
+            registroConclusaoId: registro.id,
+          },
+        });
+      } catch (err) {
+        if (isPrismaP2002(err)) {
+          const fields = getPrismaConstraintFields(err);
+          if (
+            Array.isArray(fields) &&
+            (fields.includes('registro_conclusao_id') ||
+              fields.includes('registroConclusaoId'))
+          ) {
+            throw new BadRequestException(
+              'Essa revisão já foi concluída anteriormente',
+            );
+          }
+          throw new BadRequestException(
+            'Violação de unicidade no banco de dados',
+          );
+        }
+        throw err;
+      }
     }
 
     return { registro, revisoesCriadasIds: [] as number[] };

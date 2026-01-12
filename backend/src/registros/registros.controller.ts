@@ -32,6 +32,7 @@ import {
 } from '@nestjs/swagger';
 import {
   RegistroCriadoResponseDto,
+  RegistroFindByIdResponseDto,
   RegistroListagemItemDto,
 } from './dto/registro-response.dto';
 
@@ -83,6 +84,34 @@ export class RegistrosController {
   }
 
   @ApiOperation({
+    summary: 'Buscar registro por ID',
+    description:
+      'Retorna um registro específico do usuário autenticado pelo seu ID.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador do registro',
+    example: 1,
+  })
+  @ApiOkResponse({
+    description: 'Registro encontrado com sucesso.',
+    type: RegistroFindByIdResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Registro não encontrado para o usuário autenticado.',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token ausente ou inválido.',
+  })
+  @Get(':id')
+  buscarPorId(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.registrosService.buscarPorId(req.user.id, id);
+  }
+
+  @ApiOperation({
     summary: 'Registrar novo estudo ou revisão',
     description:
       'Cria um registro validando regras de negócio entre temas, slots e revisões programadas. Pode gerar novas revisões automaticamente.',
@@ -125,6 +154,11 @@ export class RegistrosController {
     description: 'Registro não encontrado para o usuário autenticado.',
   })
   @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido.' })
+  @Delete()
+  async removerTodos(@Req() req: AuthenticatedRequest) {
+    return this.registrosService.deletarTodos(req.user.id);
+  }
+
   @Delete(':id')
   remover(
     @Req() req: AuthenticatedRequest,

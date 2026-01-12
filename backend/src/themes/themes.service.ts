@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateThemeDto } from './dto/create-theme.dto';
 import { UpdateThemeDto } from './dto/update-theme.dto';
@@ -24,6 +28,18 @@ export class ThemesService {
     const tema = dto.tema.trim();
     const descricao = dto.descricao?.trim() ?? undefined;
     const cor = this.normalizeHex(dto.cor);
+
+    // Validação de domínio: não permitir temas duplicados por usuário (case-insensitive)
+    const existente = await this.prisma.temaDeEstudo.findFirst({
+      where: {
+        creatorId: usuarioId,
+        tema: { equals: tema, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (existente) {
+      throw new ConflictException('Tema com esse nome já existe');
+    }
 
     return await this.prisma.temaDeEstudo.create({
       data: {
@@ -94,6 +110,21 @@ export class ThemesService {
 
   async update(usuarioId: number, id: number, dto: UpdateThemeDto) {
     await this.ensureOwnership(usuarioId, id);
+
+    if (dto.tema) {
+      const novoTema = dto.tema.trim();
+      const existente = await this.prisma.temaDeEstudo.findFirst({
+        where: {
+          creatorId: usuarioId,
+          tema: { equals: novoTema, mode: 'insensitive' },
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (existente)
+        throw new ConflictException('Tema com esse nome já existe');
+    }
+
     return await this.prisma.temaDeEstudo.update({
       where: { id },
       data: {

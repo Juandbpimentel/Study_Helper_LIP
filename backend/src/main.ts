@@ -2,8 +2,9 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
+import { PrismaExceptionFilter } from '@/common/filters/prisma-exception.filter';
+import { GlobalExceptionFilter } from '@/common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -31,12 +32,10 @@ async function bootstrap() {
   const tempAllowedOrigins: string[] = [];
   tempAllowedOrigins.push(process.env.FRONTEND_URL || '');
   tempAllowedOrigins.push(process.env.PUBLIC_API_URL || '');
-  if (process.env.NODE_ENV === 'development') {
-    tempAllowedOrigins.push('http://localhost:3000');
-    tempAllowedOrigins.push(`http://localhost:${port}`);
-    tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
-    tempAllowedOrigins.push('https://hoppscotch.io');
-  }
+  tempAllowedOrigins.push('http://localhost:3000');
+  tempAllowedOrigins.push(`http://localhost:${port}`);
+  tempAllowedOrigins.push(`http://127.0.0.1:${port}`);
+  tempAllowedOrigins.push('https://hoppscotch.io');
 
   const allowedOrigins = Array.from(
     new Set(
@@ -64,22 +63,23 @@ async function bootstrap() {
         return;
       }
 
-      // Não derruba a API com 500 quando a origem não é permitida.
-      // Sem os headers de CORS, o browser bloqueia a resposta naturalmente.
       callback(null, false);
     },
-    credentials: true, // CRÍTICO: Permite envio de cookies
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
   });
 
-  app.use(cookieParser());
+  app.useGlobalFilters(
+    new PrismaExceptionFilter(),
+    new GlobalExceptionFilter(),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('Study Helper API')
     .setDescription('Documentação de API para a aplicação Study Helper')
     .setVersion('1.0')
     .addBearerAuth()
-    .addCookieAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

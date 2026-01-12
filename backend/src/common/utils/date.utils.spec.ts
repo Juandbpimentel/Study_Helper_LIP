@@ -10,34 +10,46 @@ import {
 } from './date.utils';
 
 describe('date.utils', () => {
-  it('startOfDay: zera horário em UTC', () => {
+  it('startOfDay: zera horário no horário local', () => {
     const input = new Date('2026-01-08T15:23:45.678Z');
     const result = startOfDay(input);
 
-    expect(result.toISOString()).toBe('2026-01-08T00:00:00.000Z');
-    // não muta a instância original
+    const expected = new Date(
+      input.getFullYear(),
+      input.getMonth(),
+      input.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    expect(result.getTime()).toBe(expected.getTime());
     expect(input.toISOString()).toBe('2026-01-08T15:23:45.678Z');
   });
 
-  it('addDays: soma dias em UTC', () => {
-    const input = new Date('2026-01-31T00:00:00.000Z');
+  it('addDays: soma dias no calendário local', () => {
+    const input = new Date(2026, 0, 31, 0, 0, 0);
     const result = addDays(input, 1);
-    expect(result.toISOString()).toBe('2026-02-01T00:00:00.000Z');
+    const expected = new Date(2026, 1, 1, 0, 0, 0);
+    expect(result.getTime()).toBe(expected.getTime());
   });
 
-  it('startOfWeek: retorna o início da semana baseado no primeiroDia', () => {
-    const date = new Date('2026-01-08T15:00:00.000Z'); // Qui
+  it('startOfWeek: retorna o início da semana baseado no primeiroDia (local)', () => {
+    const date = new Date(2026, 0, 8, 15, 0, 0);
 
     const monday = startOfWeek(date, DiaSemana.Seg);
-    expect(monday.toISOString()).toBe('2026-01-05T00:00:00.000Z');
+    const expectedMon = new Date(2026, 0, 5, 0, 0, 0);
+    expect(monday.getTime()).toBe(expectedMon.getTime());
 
     const sunday = startOfWeek(date, DiaSemana.Dom);
-    expect(sunday.toISOString()).toBe('2026-01-04T00:00:00.000Z');
+    const expectedSun = new Date(2026, 0, 4, 0, 0, 0);
+    expect(sunday.getTime()).toBe(expectedSun.getTime());
   });
 
   it('endOfWeek: adiciona 7 dias ao start', () => {
-    const start = new Date('2026-01-05T00:00:00.000Z');
-    expect(endOfWeek(start).toISOString()).toBe('2026-01-12T00:00:00.000Z');
+    const start = new Date(2026, 0, 5, 0, 0, 0);
+    const expected = new Date(2026, 0, 12, 0, 0, 0);
+    expect(endOfWeek(start).getTime()).toBe(expected.getTime());
   });
 
   it('getOffsetFromFirstDay: calcula offset circular', () => {
@@ -59,6 +71,7 @@ describe('date.utils', () => {
 
   it('formatISODate: formata usando startOfDay', () => {
     const date = new Date('2026-01-08T15:00:00.000Z');
-    expect(formatISODate(date)).toBe('2026-01-08T00:00:00.000Z');
+    const expected = startOfDay(date).toISOString();
+    expect(formatISODate(date)).toBe(expected);
   });
 });
