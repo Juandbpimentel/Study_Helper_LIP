@@ -5,7 +5,7 @@ import type { MetricsService } from '@/common/services/metrics.service';
 import type { OfensivaService } from '@/ofensiva/ofensiva.service';
 import type { ResumoRelatorioQueryDto } from './dto/resumo-query.dto';
 import type { Prisma } from '@prisma/client';
-import { StatusRevisao } from '@prisma/client';
+import { StatusRevisao, TipoRegistro } from '@prisma/client';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -49,12 +49,17 @@ describe('RelatoriosService', () => {
       diasComEstudo: 0,
       tempoMedioPorDiaAtivo: 0,
       registrosPorTipo: [],
+      tempoMedioPorEstudo: 0,
+      revisoesConcluidasPorRegistro: 0,
       revisoesConcluidas: 0,
       revisoesPendentes: 0,
       revisoesAtrasadas: 0,
       revisoesExpiradas: 0,
       revisoesHoje: 0,
       desempenhoPorTema: [],
+      seriesDiaria: [],
+      estudosPorTema: [],
+      periodoDias: 1,
     };
 
     jest.spyOn(service, 'resumo').mockResolvedValue(resumo);
@@ -212,6 +217,24 @@ describe('RelatoriosService', () => {
     const prisma = {
       temaDeEstudo: { findFirst: jest.fn() },
       revisaoProgramada: { count: revisaoCount },
+      registroEstudo: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            tempoDedicado: 30,
+            dataEstudo: new Date('2026-01-05T12:00:00.000Z'),
+            tipoRegistro: TipoRegistro.EstudoDeTema,
+            temaId: 1,
+            tema: { tema: 'Tema A', cor: '#000000' },
+          },
+          {
+            tempoDedicado: 20,
+            dataEstudo: new Date('2026-01-08T10:00:00.000Z'),
+            tipoRegistro: TipoRegistro.Revisao,
+            temaId: 1,
+            tema: { tema: 'Tema A', cor: '#000000' },
+          },
+        ]),
+      },
     } as unknown as PrismaService;
 
     const getRegistroStats = jest
@@ -309,6 +332,11 @@ describe('RelatoriosService', () => {
     expect(result.tempoTotalEstudado).toBe(120);
     expect(result.diasComEstudo).toBe(4);
     expect(result.tempoMedioPorDiaAtivo).toBe(30);
+    expect(result.tempoMedioPorEstudo).toBe(12);
+    expect(result.revisoesConcluidasPorRegistro).toBe(1);
+    expect(result.seriesDiaria.length).toBe(2);
+    expect(result.estudosPorTema[0]?.revisoesConcluidas).toBe(1);
+    expect(result.periodoDias).toBe(4);
     expect(result.revisoesHoje).toBe(3);
     expect(result.revisoesPendentes).toBe(5);
     expect(result.desempenhoPorTema.length).toBe(1);
@@ -333,6 +361,7 @@ describe('RelatoriosService', () => {
     const prisma = {
       temaDeEstudo: { findFirst: jest.fn() },
       revisaoProgramada: { count: revisaoCount },
+      registroEstudo: { findMany: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
 
     const metrics: Pick<

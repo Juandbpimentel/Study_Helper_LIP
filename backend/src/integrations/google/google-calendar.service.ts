@@ -964,7 +964,7 @@ export class GoogleCalendarService {
     });
     if (!client) return;
 
-    const revisao = await this.prismaDb.revisaoProgramada.findFirst({
+    let revisao = await this.prismaDb.revisaoProgramada.findFirst({
       where: { id: revisaoId, creatorId: userId },
       include: { registroOrigem: { include: { tema: true } } },
     });
@@ -992,6 +992,31 @@ export class GoogleCalendarService {
         data: { googleEventId: null },
       });
       return;
+    }
+
+    if (revisao.googleEventId) {
+      try {
+        await client.calendar.events.delete({
+          calendarId: client.calendarId,
+          eventId: revisao.googleEventId,
+        });
+      } catch (e) {
+        this.logger.warn(
+          `Falha ao deletar evento anterior da revisão ${revisaoId}: ${String(e)}`,
+        );
+      }
+
+      try {
+        await this.prismaDb.revisaoProgramada.update({
+          where: { id: revisao.id },
+          data: { googleEventId: null },
+        });
+        revisao = { ...revisao, googleEventId: null };
+      } catch (dbErr) {
+        this.logger.warn(
+          `Falha ao limpar googleEventId da revisão ${revisaoId}: ${String(dbErr)}`,
+        );
+      }
     }
 
     await this.upsertRevisionEvent(

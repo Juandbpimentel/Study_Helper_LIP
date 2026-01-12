@@ -10,6 +10,8 @@ import { Revisao, TemaDeEstudo } from "@/types/types";
 // 2. IMPORTAÇÃO DOS SERVIÇOS ESPECÍFICOS
 import { reviewService } from "@/services/review-service";
 import { subjectService } from "@/services/subject-service";
+import { offensivaService } from "@/services/offensiva-service";
+import { OfensivaResumo } from "@/types/types";
 import { studyService } from "@/services/study-service";
 
 import { ReviewCard } from "@/components/reviews/ReviewCard";
@@ -23,6 +25,9 @@ import { PeriodSelect } from "@/components/ui/PeriodSelect";
 export default function ReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [offensivaBase, setOffensivaBase] = useState<OfensivaResumo | null>(
+    null
+  );
 
   // 3. ESTADOS TIPADOS CORRETAMENTE
   const [reviews, setReviews] = useState<Revisao[]>([]);
@@ -82,6 +87,10 @@ export default function ReviewsPage() {
 
   useEffect(() => {
     fetchData();
+    offensivaService
+      .getMe()
+      .then((res) => setOffensivaBase(res.data || null))
+      .catch(() => null);
   }, [fetchData]);
 
   // --- AÇÕES ---
@@ -89,9 +98,65 @@ export default function ReviewsPage() {
   const [isConcludeModalOpen, setIsConcludeModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
+  const ofensivaMessages = {
+    broken: [
+      "Ofensiva quebrada. Tente novamente amanhã.",
+      "Streak caiu. Recomece amanhã.",
+      "Sequência perdida. Amanhã é outro dia.",
+    ],
+    start: [
+      "Parabéns! Você iniciou sua ofensiva.",
+      "Primeiro dia de ofensiva! Continue firme.",
+      "Streak iniciada! Bora manter.",
+    ],
+    gain: [
+      "Parabéns! +1 dia de ofensiva.",
+      "Streak up! Mais um dia na conta.",
+      "Sequência aumentou! Ótimo trabalho.",
+    ],
+    blockGain: [
+      "Bloqueio recuperado na ofensiva!",
+      "Você ganhou um bloqueio extra.",
+      "Bloqueio devolvido. Proteção ativa!",
+    ],
+    blockUse: [
+      "Você usou um bloqueio da ofensiva.",
+      "Bloqueio consumido. Fique atento à sequência.",
+      "Um bloqueio foi usado. Foque no próximo dia.",
+    ],
+  };
+
+  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
   const openConcludeModal = (id: number) => {
     setPendingReviewId(id);
     setIsConcludeModalOpen(true);
+  };
+
+  const handleOffensivaFeedback = (
+    prev: OfensivaResumo | null,
+    next: OfensivaResumo | null
+  ) => {
+    if (!next) return;
+    if (prev && next.atual < prev.atual) {
+      setToast({ variant: "error", message: pick(ofensivaMessages.broken) });
+    } else if (prev && next.atual > prev.atual) {
+      setToast({
+        variant: "success",
+        message: `${pick(ofensivaMessages.gain)} Série: ${next.atual}d.`,
+      });
+    } else if (!prev && next.atual > 0) {
+      setToast({ variant: "success", message: pick(ofensivaMessages.start) });
+    } else if (prev && next.bloqueiosRestantes > prev.bloqueiosRestantes) {
+      setToast({
+        variant: "success",
+        message: pick(ofensivaMessages.blockGain),
+      });
+    } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
+      setToast({ variant: "info", message: pick(ofensivaMessages.blockUse) });
+    }
+    if (next) setOffensivaBase(next);
+    setTimeout(() => setToast(null), 3000);
   };
 
   const handleCompleteDirect = async () => {
@@ -106,6 +171,8 @@ export default function ReviewsPage() {
       } as any);
 
       await reviewService.complete(pendingReviewId);
+      const ofensivaAfter = await offensivaService.getMe();
+      handleOffensivaFeedback(offensivaBase, ofensivaAfter.data || null);
       await fetchData();
     } catch (err) {
       console.error("Erro ao concluir revisão", err);
@@ -125,6 +192,8 @@ export default function ReviewsPage() {
   const handleRegisterSuccess = async () => {
     setIsRegisterModalOpen(false);
     setPendingReviewId(null);
+    const ofensivaAfter = await offensivaService.getMe();
+    handleOffensivaFeedback(offensivaBase, ofensivaAfter.data || null);
     await fetchData();
   };
 

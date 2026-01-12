@@ -11,6 +11,36 @@ import { offensivaService } from "@/services/offensiva-service";
 import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
 import { OfensivaResumo } from "@/types/types";
 
+const ofensivaMessages = {
+  broken: [
+    "Ofensiva quebrada. Volte amanhã para recomeçar!",
+    "Streak caiu. Hora de retomar amanhã.",
+    "Sequência perdida. Recomece amanhã!",
+  ],
+  start: [
+    "Parabéns! Você iniciou sua ofensiva.",
+    "Primeiro dia de ofensiva! Siga firme.",
+    "Streak iniciada! Continue assim.",
+  ],
+  gain: [
+    "Parabéns! +1 dia de ofensiva.",
+    "Sequência aumentou! +1 dia.",
+    "Streak up! Mais um dia concluído.",
+  ],
+  blockGain: [
+    "Você recuperou um bloqueio!",
+    "Bloqueio devolvido. Boa!",
+    "Bloqueio extra ganho. Continue!",
+  ],
+  blockUse: [
+    "Bloqueio usado. Mantenha o ritmo!",
+    "Você consumiu um bloqueio da ofensiva.",
+    "Um bloqueio foi usado. Foque no próximo dia.",
+  ],
+};
+
+const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
 type RegistroTipoUI = "EstudoDeTema" | "EstudoAberto" | "Revisao";
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -208,12 +238,19 @@ export function RegisterStudyModal({
           if (prev && next.atual < prev.atual) {
             setToast({
               variant: "error",
-              message: "Ofensiva quebrada. Volte amanhã para recomeçar!",
+              message: pick(ofensivaMessages.broken),
             });
           } else if (prev && next.atual > prev.atual) {
             setToast({
               variant: "success",
-              message: `+1 dia de ofensiva! Série atual: ${next.atual}d.`,
+              message: `${pick(ofensivaMessages.gain)} Série atual: ${
+                next.atual
+              }d.`,
+            });
+          } else if (!prev && next.atual > 0) {
+            setToast({
+              variant: "success",
+              message: pick(ofensivaMessages.start),
             });
           } else if (
             prev &&
@@ -221,7 +258,7 @@ export function RegisterStudyModal({
           ) {
             setToast({
               variant: "success",
-              message: "Você recuperou um bloqueio!",
+              message: pick(ofensivaMessages.blockGain),
             });
           } else if (
             prev &&
@@ -229,7 +266,7 @@ export function RegisterStudyModal({
           ) {
             setToast({
               variant: "info",
-              message: "Bloqueio usado. Mantenha o ritmo!",
+              message: pick(ofensivaMessages.blockUse),
             });
           }
 

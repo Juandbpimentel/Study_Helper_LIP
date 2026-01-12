@@ -10,6 +10,36 @@ import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
 import { offensivaService } from "@/services/offensiva-service";
 import { OfensivaResumo } from "@/types/types";
 
+const ofensivaMessages = {
+  broken: [
+    "Ofensiva quebrada. Tente novamente amanhã.",
+    "Streak caiu. Bora retomar amanhã.",
+    "Você perdeu a sequência. Recomece amanhã!",
+  ],
+  start: [
+    "Parabéns! Você iniciou sua ofensiva.",
+    "Primeiro dia de ofensiva! Mantenha o ritmo.",
+    "Streak iniciada! Siga firme.",
+  ],
+  gain: [
+    "Parabéns! +1 dia de ofensiva.",
+    "Streak up! Mais um dia na conta.",
+    "Sequência aumentou! Continue assim.",
+  ],
+  blockGain: [
+    "Bloqueio recuperado na ofensiva!",
+    "Você ganhou um bloqueio extra.",
+    "Bloqueio devolvido. Proteção ativa!",
+  ],
+  blockUse: [
+    "Você usou um bloqueio da ofensiva.",
+    "Bloqueio consumido. Cuidado com a sequência!",
+    "Um bloqueio foi usado. Foque no próximo dia.",
+  ],
+};
+
+const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
 interface ReviewListProps {
   reviews: Revisao[];
   onRefresh?: () => void;
@@ -45,25 +75,21 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
     if (!next) return;
 
     if (prev && next.atual < prev.atual) {
-      setToast({
-        variant: "error",
-        message: "Ofensiva quebrada. Tente novamente amanhã.",
-      });
+      setToast({ variant: "error", message: pick(ofensivaMessages.broken) });
     } else if (prev && next.atual > prev.atual) {
       setToast({
         variant: "success",
-        message: `+1 dia de ofensiva! Série: ${next.atual}d.`,
+        message: `${pick(ofensivaMessages.gain)} Série: ${next.atual}d.`,
       });
+    } else if (!prev && next.atual > 0) {
+      setToast({ variant: "success", message: pick(ofensivaMessages.start) });
     } else if (prev && next.bloqueiosRestantes > prev.bloqueiosRestantes) {
       setToast({
         variant: "success",
-        message: "Bloqueio recuperado na ofensiva!",
+        message: pick(ofensivaMessages.blockGain),
       });
     } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
-      setToast({
-        variant: "info",
-        message: "Você usou um bloqueio da ofensiva.",
-      });
+      setToast({ variant: "info", message: pick(ofensivaMessages.blockUse) });
     }
 
     if (next) setOffensivaBase(next);
@@ -74,13 +100,14 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
     if (!pendingReviewId) return;
     try {
       // cria registro automático e marca revisão como concluída
-      await studyService.create({
+      const payload: Parameters<typeof studyService.create>[0] = {
         tipo_registro: "Revisao",
         conteudo_estudado: "Concluído (registro automático)",
         data_estudo: new Date().toISOString(),
         tempo_dedicado: 0,
         revisao_programada_id: pendingReviewId,
-      } as any);
+      };
+      await studyService.create(payload);
 
       await reviewService.complete(pendingReviewId);
       const ofensivaAfter = await offensivaService.getMe();

@@ -251,6 +251,17 @@ export class CronogramasService {
         .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
       if (idsParaRemover.length) {
+        await tx.revisaoProgramada.updateMany({
+          where: {
+            creatorId: usuarioId,
+            slotCronogramaId: { in: idsParaRemover },
+          },
+          data: { slotCronogramaId: null },
+        });
+        await tx.registroEstudo.updateMany({
+          where: { creatorId: usuarioId, slotId: { in: idsParaRemover } },
+          data: { slotId: null },
+        });
         await tx.slotCronograma.deleteMany({
           where: { id: { in: idsParaRemover } },
         });
@@ -277,13 +288,14 @@ export class CronogramasService {
     if (!slot) throw new NotFoundException('Slot não encontrado');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.revisaoProgramada.deleteMany({
+      await tx.revisaoProgramada.updateMany({
         where: { creatorId: usuarioId, slotCronogramaId: slotId },
+        data: { slotCronogramaId: null },
       });
-      await tx.registroEstudo.deleteMany({
+      await tx.registroEstudo.updateMany({
         where: { creatorId: usuarioId, slotId },
+        data: { slotId: null },
       });
-
       await tx.slotCronograma.delete({ where: { id: slotId } });
     });
 

@@ -59,6 +59,37 @@ export class DesempenhoTemaDto {
   tempoTotal!: number;
 }
 
+export class EstudoPorTemaDto extends DesempenhoTemaDto {
+  @ApiProperty({
+    description: 'Quantidade de revisões concluídas via registros',
+  })
+  revisoesConcluidas!: number;
+}
+
+export class SerieDiariaDto {
+  @ApiProperty({ description: 'Data (UTC) no formato YYYY-MM-DD' })
+  data!: string;
+
+  @ApiProperty({ description: 'Rótulo amigável da data (dd/MM)' })
+  label!: string;
+
+  @ApiProperty({ description: 'Minutos estudados no dia' })
+  minutos!: number;
+}
+
+export class SerieDiariaTemaDto extends SerieDiariaDto {
+  @ApiProperty({
+    description: 'Minutos por tema no dia',
+    type: () => [DesempenhoTemaDto],
+  })
+  temas!: Array<{
+    temaId: number | null;
+    tema: string;
+    cor: string | null;
+    minutos: number;
+  }>;
+}
+
 export class ResumoRelatorioResponseDto {
   @ApiProperty({
     description:
@@ -93,6 +124,17 @@ export class ResumoRelatorioResponseDto {
   tempoMedioPorDiaAtivo!: number;
 
   @ApiProperty({
+    description:
+      'Média de minutos por registro de estudo (tempo total / totalEstudos).',
+  })
+  tempoMedioPorEstudo!: number;
+
+  @ApiProperty({
+    description: 'Quantidade de dias corridos no período efetivo.',
+  })
+  periodoDias!: number;
+
+  @ApiProperty({
     description: 'Distribuição de registros por tipo dentro do período.',
     type: () => [RegistroPorTipoDto],
   })
@@ -100,6 +142,12 @@ export class ResumoRelatorioResponseDto {
 
   @ApiProperty({ description: 'Quantidade de revisões concluídas' })
   revisoesConcluidas!: number;
+
+  @ApiProperty({
+    description:
+      'Quantidade de revisões concluídas a partir de registros de estudo (tipo Revisao).',
+  })
+  revisoesConcluidasPorRegistro!: number;
 
   @ApiProperty({ description: 'Quantidade de revisões pendentes ou adiadas' })
   revisoesPendentes!: number;
@@ -118,4 +166,24 @@ export class ResumoRelatorioResponseDto {
     type: () => [DesempenhoTemaDto],
   })
   desempenhoPorTema!: DesempenhoTemaDto[];
+
+  @ApiProperty({
+    description:
+      'Estatísticas completas por tema (inclui revisões concluídas e tempo).',
+    type: () => [EstudoPorTemaDto],
+  })
+  estudosPorTema!: EstudoPorTemaDto[];
+
+  @ApiProperty({
+    description: 'Série diária de minutos estudados dentro do período.',
+    type: () => [SerieDiariaDto],
+  })
+  seriesDiaria!: SerieDiariaDto[];
+
+  @ApiProperty({
+    description:
+      'Série diária com detalhamento por tema (para gráficos stack/pizza).',
+    type: () => [SerieDiariaTemaDto],
+  })
+  seriesDiariaTemas!: SerieDiariaTemaDto[];
 }

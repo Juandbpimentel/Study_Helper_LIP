@@ -47,7 +47,9 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=
 
 Nota: se você tiver `DATABASE_URL`/`DIRECT_URL` setados no Windows (ex.: para rodar Prisma local), o Compose da raiz **não usa** esses nomes — ele usa `DOCKER_DATABASE_URL`/`DOCKER_DIRECT_URL`.
 
-Para ativar o microserviço PDF, use o profile `pdf` na hora de rodar o compose:
+Para ativar o microserviço PDF, use o profile `pdf` na hora de rodar o compose
+
+Comando para rodar todo o sistema com PDF:
 
 ```bash
 docker compose --profile pdf up --build

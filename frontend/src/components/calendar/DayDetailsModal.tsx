@@ -19,6 +19,36 @@ import { ToastState } from "@/components/ui/ToastBanner";
 import { offensivaService } from "@/services/offensiva-service";
 import { OfensivaResumo } from "@/types/types";
 
+const ofensivaMessages = {
+  broken: [
+    "Ofensiva quebrada.",
+    "Streak perdida. Amanhã é um novo dia.",
+    "Sequência caiu. Recomece amanhã.",
+  ],
+  start: [
+    "Parabéns! Você iniciou sua ofensiva.",
+    "Primeiro dia de ofensiva! Continue firme.",
+    "Streak iniciada! Bora manter.",
+  ],
+  gain: [
+    "Parabéns! +1 dia de ofensiva.",
+    "Streak up! Mais um dia na conta.",
+    "Sequência aumentou! Excelente.",
+  ],
+  blockGain: [
+    "Bloqueio recuperado!",
+    "Você ganhou um bloqueio extra.",
+    "Bloqueio devolvido. Proteção ativa!",
+  ],
+  blockUse: [
+    "Você usou um bloqueio da ofensiva.",
+    "Bloqueio consumido. Atenção à sequência.",
+    "Um bloqueio foi usado. Foque no próximo dia.",
+  ],
+};
+
+const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
 // Helper para cor hexadecimal com opacidade
 const getBadgeStyle = (color: string = "#6366f1") => {
   return {
@@ -106,19 +136,21 @@ export function DayDetailsModal({
   ) => {
     if (!next) return;
     if (prev && next.atual < prev.atual) {
-      onToast?.({ variant: "error", message: "Ofensiva quebrada." });
+      onToast?.({ variant: "error", message: pick(ofensivaMessages.broken) });
     } else if (prev && next.atual > prev.atual) {
       onToast?.({
         variant: "success",
-        message: `+1 dia de ofensiva! Série: ${next.atual}d.`,
+        message: `${pick(ofensivaMessages.gain)} Série: ${next.atual}d.`,
       });
+    } else if (!prev && next.atual > 0) {
+      onToast?.({ variant: "success", message: pick(ofensivaMessages.start) });
     } else if (prev && next.bloqueiosRestantes > prev.bloqueiosRestantes) {
-      onToast?.({ variant: "success", message: "Bloqueio recuperado!" });
-    } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
       onToast?.({
-        variant: "info",
-        message: "Você usou um bloqueio da ofensiva.",
+        variant: "success",
+        message: pick(ofensivaMessages.blockGain),
       });
+    } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
+      onToast?.({ variant: "info", message: pick(ofensivaMessages.blockUse) });
     }
     if (next) setOffensivaBase(next);
     setTimeout(() => onToast?.(null), 3000);
