@@ -258,4 +258,86 @@ export class RevisoesService {
       data: { statusRevisao: StatusRevisao.Pendente },
     });
   }
+
+  async listarNotificacoes(usuarioId: number) {
+    await this.atualizarStatusAutomatico(usuarioId);
+
+    const hoje = startOfDay(new Date());
+    const limiteBreve = addDays(hoje, 2);
+
+    const revisoes = await this.prisma.revisaoProgramada.findMany({
+      where: {
+        creatorId: usuarioId,
+        statusRevisao: {
+          in: [
+            StatusRevisao.Pendente,
+            StatusRevisao.Adiada,
+            StatusRevisao.Atrasada,
+            StatusRevisao.Expirada,
+          ],
+        },
+      },
+      orderBy: { dataRevisao: 'asc' },
+      include: {
+        registroOrigem: {
+          include: {
+            tema: true,
+          },
+        },
+      },
+    });
+
+    return revisoes
+      .map((rev) => {
+        const data = startOfDay(new Date(rev.dataRevisao));
+        const tema = rev.registroOrigem?.tema?.tema;
+
+        if (rev.statusRevisao === StatusRevisao.Expirada) {
+          return {
+            revisaoId: rev.id,
+            status: rev.statusRevisao,
+            dataRevisao: rev.dataRevisao,
+            tipo: 'expirada' as const,
+            tema,
+            mensagem: `Revisão ${tema ? `de ${tema} ` : ''}expirada.`,
+          };
+        }
+
+        if (rev.statusRevisao === StatusRevisao.Atrasada) {
+          return {
+            revisaoId: rev.id,
+            status: rev.statusRevisao,
+            dataRevisao: rev.dataRevisao,
+            tipo: 'atrasada' as const,
+            tema,
+            mensagem: `Revisão ${tema ? `de ${tema} ` : ''}atrasada.`,
+          };
+        }
+
+        if (data.getTime() === hoje.getTime()) {
+          return {
+            revisaoId: rev.id,
+            status: rev.statusRevisao,
+            dataRevisao: rev.dataRevisao,
+            tipo: 'hoje' as const,
+            tema,
+            mensagem: `Revisão ${tema ? `de ${tema} ` : ''}é hoje.`,
+          };
+        }
+
+        if (data.getTime() <= limiteBreve.getTime()) {
+          return {
+            revisaoId: rev.id,
+            status: rev.statusRevisao,
+            dataRevisao: rev.dataRevisao,
+            tipo: 'em_breve' as const,
+            tema,
+            mensagem: `Revisão ${tema ? `de ${tema} ` : ''}nas próximas 48h.`,
+          };
+        }
+
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+  }
 }

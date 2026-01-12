@@ -13,10 +13,9 @@ export function IsNotInFuture(validationOptions?: ValidationOptions) {
       options: validationOptions,
       validator: {
         validate(value: any, args: ValidationArguments) {
-          if (!value) return true; // optional
+          if (!value) return true;
           const date = new Date(value);
           if (Number.isNaN(date.getTime())) return false;
-          // allow small clock skew: consider now as cut-off
           return date.getTime() <= Date.now();
         },
         defaultMessage(args: ValidationArguments) {

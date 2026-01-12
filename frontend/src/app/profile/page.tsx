@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +15,10 @@ import {
 import { useAppContext } from "@/context/app-context";
 import { authService, DiaSemana, Usuario } from "@/lib/auth";
 import { userService } from "@/services/user-service";
+import {
+  googleIntegrationService,
+  GoogleIntegrationStatus,
+} from "@/services/google-integration-service";
 import { FormModal } from "@/components/form-modal";
 import {
   ProfileFormValues,
@@ -68,11 +72,25 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [googleStatus, setGoogleStatus] =
+    useState<GoogleIntegrationStatus | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // States for general settings
   const [dailyGoal, setDailyGoal] = useState(60);
   const [intervals, setIntervals] = useState<number[]>([1, 7, 14]);
   const [primeiroDiaSemana, setPrimeiroDiaSemana] = useState<DiaSemana>("Dom");
+
+  const fetchGoogleStatus = useCallback(async () => {
+    setGoogleLoading(true);
+    const res = await googleIntegrationService.getStatus();
+    if (res.data) {
+      setGoogleStatus(res.data);
+    } else if (res.error) {
+      setToast({ variant: "error", message: res.error });
+    }
+    setGoogleLoading(false);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -83,6 +101,11 @@ export default function ProfilePage() {
       setPrimeiroDiaSemana(user.primeiroDiaSemana || "Dom");
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    void fetchGoogleStatus();
+  }, [user, fetchGoogleStatus]);
 
   useEffect(() => {
     if (!toast) return;
@@ -121,10 +144,12 @@ export default function ProfilePage() {
 
   const handleApiError = (err: unknown) => {
     const message =
-      typeof err === "object" &&
-      err !== null &&
-      "error" in err &&
-      typeof (err as { error?: unknown }).error === "string"
+      typeof err === "string"
+        ? err
+        : typeof err === "object" &&
+          err !== null &&
+          "error" in err &&
+          typeof (err as { error?: unknown }).error === "string"
         ? (err as { error?: string }).error
         : err instanceof Error
         ? err.message
@@ -171,6 +196,29 @@ export default function ProfilePage() {
       handleApiSuccess("Preferências salvas com sucesso!");
     }
     setSaving(false);
+  };
+
+  const handleGoogleConnect = async () => {
+    try {
+      setGoogleLoading(true);
+      const authUrl = await googleIntegrationService.startOAuth();
+      window.location.href = authUrl;
+    } catch (error) {
+      handleApiError(error);
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleDisconnect = async () => {
+    setGoogleLoading(true);
+    const res = await googleIntegrationService.disconnect();
+    if (!res.ok) {
+      handleApiError(res.error);
+    } else {
+      await fetchGoogleStatus();
+      handleApiSuccess("Google Calendar desconectado e IDs limpos.");
+    }
+    setGoogleLoading(false);
   };
 
   const handleEmailSubmit = emailForm.handleSubmit(async (data: EmailForm) => {
@@ -300,6 +348,61 @@ export default function ProfilePage() {
             onCancel={() => {}}
             isSubmitting={isSubmitting}
           />
+        </div>
+
+        {/* Google Calendar Integration */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                Google Calendar
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Sincronize seu cronograma e revisões com o Google Calendar.
+              </p>
+              {googleStatus?.backend && !googleStatus.backend.enabled && (
+                <p className="text-sm text-amber-600 mt-3">
+                  Backend sem configuração de Google Calendar:{" "}
+                  {googleStatus.backend.issues.join("; ")}
+                </p>
+              )}
+              {googleStatus?.connected && googleStatus.calendarId && (
+                <p className="text-xs text-emerald-600 mt-3">
+                  Calendário vinculado: {googleStatus.calendarId}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  googleStatus?.connected
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {googleStatus?.connected ? "Conectado" : "Desconectado"}
+              </span>
+              {googleStatus?.connected ? (
+                <button
+                  onClick={handleGoogleDisconnect}
+                  disabled={googleLoading}
+                  className="ui-btn-secondary px-4 py-2"
+                >
+                  {googleLoading ? "Processando..." : "Desconectar"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleGoogleConnect}
+                  disabled={
+                    googleLoading || googleStatus?.backend?.enabled === false
+                  }
+                  className="ui-btn-primary px-4 py-2"
+                >
+                  {googleLoading ? "Abrindo Google..." : "Conectar"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Preferences Section */}

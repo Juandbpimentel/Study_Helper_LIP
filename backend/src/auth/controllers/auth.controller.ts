@@ -77,7 +77,6 @@ export class AuthController {
   login(@Body() body: LoginRequestDto, @Req() req: LoginRequest) {
     const authResult = this.authService.loginFromGuard(req.user);
 
-    // Cleanup pós-login: se o usuário revogou acesso no Google, desfaz a integração no banco.
     void this.googleCalendar.verifyAccessAndCleanupIfRevoked(req.user.id);
 
     const ofensiva = this.ofensivaService.fromUsuario(req.user);
@@ -128,7 +127,6 @@ export class AuthController {
   async register(@Body() body: CreateUserDto) {
     const authResult = await this.authService.register(body);
 
-    // Novo usuário começa com ofensiva zerada.
     const ofensiva = this.ofensivaService.fromUsuario(authResult.user);
 
     return {

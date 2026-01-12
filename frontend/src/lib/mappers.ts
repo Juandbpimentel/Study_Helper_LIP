@@ -120,7 +120,8 @@ export function mapRegistroFromApi(value: unknown): RegistroEstudo {
   const tema = obj["tema"];
   const slotCronogramaRaw = obj["slotCronograma"] ?? obj["slot_cronograma"];
   const revisoesGeradasRaw = obj["revisoesGeradas"] ?? obj["revisoes_geradas"];
-  const revisaoConcluidaRaw = obj["revisaoConcluida"] ?? obj["revisao_concluida"];
+  const revisaoConcluidaRaw =
+    obj["revisaoConcluida"] ?? obj["revisao_concluida"];
 
   const slotCronograma = slotCronogramaRaw
     ? mapCronogramaSlotFromApi(
@@ -168,11 +169,12 @@ const statusMap: Record<string, Revisao["status_revisao"]> = {
   Concluida: "CONCLUIDA",
   Adiada: "ADIADA",
   Atrasada: "ATRASADA",
-  Expirada: "ATRASADA",
+  Expirada: "EXPIRADA",
   PENDENTE: "PENDENTE",
   CONCLUIDA: "CONCLUIDA",
   ADIADA: "ADIADA",
   ATRASADA: "ATRASADA",
+  EXPIRADA: "EXPIRADA",
 };
 
 export function mapRevisaoFromApi(value: unknown): Revisao {

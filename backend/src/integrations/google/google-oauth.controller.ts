@@ -84,6 +84,20 @@ export class GoogleOAuthController {
   @ApiBearerAuth()
   @ApiCookieAuth()
   @ApiOperation({
+    summary: 'Status da integração Google Calendar do usuário autenticado',
+  })
+  @ApiOkResponse({
+    schema: { example: { connected: false, calendarId: null } },
+  })
+  @Get('status')
+  async status(@Req() req: AuthenticatedRequest) {
+    return this.google.getUserIntegrationStatus(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiOperation({
     summary: 'Desconectar Google Calendar',
     description:
       'Remove tokens/IDs persistidos da integração. Não remove eventos já criados no Google (a menos que você apague o calendário manualmente).',

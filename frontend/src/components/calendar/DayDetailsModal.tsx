@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatDatePt } from "@/lib/formatters";
@@ -16,6 +16,8 @@ import { ConcludeReviewModal } from "@/components/reviews/ConcludeReviewModal";
 import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
 import { ToastState } from "@/components/ui/ToastBanner";
+import { offensivaService } from "@/services/offensiva-service";
+import { OfensivaResumo } from "@/types/types";
 
 // Helper para cor hexadecimal com opacidade
 const getBadgeStyle = (color: string = "#6366f1") => {
@@ -73,6 +75,9 @@ export function DayDetailsModal({
   const [pendingReviewId, setPendingReviewId] = useState<number | null>(null);
   const [isConcludeModalOpen, setIsConcludeModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [offensivaBase, setOffensivaBase] = useState<OfensivaResumo | null>(
+    null
+  );
 
   // pagination for studies within the day modal
   const [studiesPage, setStudiesPage] = useState(1);
@@ -85,7 +90,39 @@ export function DayDetailsModal({
     }
   });
 
+  useEffect(() => {
+    if (!isOpen) return;
+    offensivaService
+      .getMe()
+      .then((res) => setOffensivaBase(res.data || null))
+      .catch(() => null);
+  }, [isOpen]);
+
   if (!isOpen || !date || !data) return null;
+
+  const handleOffensivaFeedback = (
+    prev: OfensivaResumo | null,
+    next: OfensivaResumo | null
+  ) => {
+    if (!next) return;
+    if (prev && next.atual < prev.atual) {
+      onToast?.({ variant: "error", message: "Ofensiva quebrada." });
+    } else if (prev && next.atual > prev.atual) {
+      onToast?.({
+        variant: "success",
+        message: `+1 dia de ofensiva! Série: ${next.atual}d.`,
+      });
+    } else if (prev && next.bloqueiosRestantes > prev.bloqueiosRestantes) {
+      onToast?.({ variant: "success", message: "Bloqueio recuperado!" });
+    } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
+      onToast?.({
+        variant: "info",
+        message: "Você usou um bloqueio da ofensiva.",
+      });
+    }
+    if (next) setOffensivaBase(next);
+    setTimeout(() => onToast?.(null), 3000);
+  };
 
   const complete = async (id: number) => {
     // open modal to choose how to conclude
@@ -106,6 +143,8 @@ export function DayDetailsModal({
       });
 
       await onCompleteReview(pendingReviewId);
+      const ofensivaAfter = await offensivaService.getMe();
+      handleOffensivaFeedback(offensivaBase, ofensivaAfter.data || null);
       onToast?.({
         variant: "success",
         message: "Revisão concluída e registro criado.",
@@ -131,6 +170,8 @@ export function DayDetailsModal({
     setPendingReviewId(null);
     // ensure parent updates
     await onCompleteReview(pendingReviewId as number);
+    const ofensivaAfter = await offensivaService.getMe();
+    handleOffensivaFeedback(offensivaBase, ofensivaAfter.data || null);
   };
 
   const handleOpenRecord = (rId: number) => {

@@ -58,7 +58,6 @@ export function calcularOfensivaPorDiasAtivos(
     cursor = proximo;
 
     if (bloqueiosUsados === bloqueiosTotais) {
-      // Ainda pode continuar se os próximos forem consecutivos (diff=1).
       continue;
     }
   }
@@ -82,8 +81,6 @@ function ajustarPorDiasSemAtividade(args: {
   const hoje = startOfDay(new Date());
   const ultimoDiaAtivo = startOfDay(args.ultimoDiaAtivo);
 
-  // Só consome bloqueio quando um dia inteiro passou sem atividade.
-  // Ex.: hoje=08, ultimo=06 => faltasEntre=1 (dia 07 inteiro sem registro).
   const diff = diffEmDias(hoje, ultimoDiaAtivo);
   const faltasEntreHojeEUltimo = Math.max(0, diff - 1);
 

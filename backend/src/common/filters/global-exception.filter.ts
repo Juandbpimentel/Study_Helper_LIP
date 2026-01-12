@@ -31,7 +31,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    // If already an HttpException, preserve status and message
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const payload = exception.getResponse();
@@ -42,7 +41,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         path: request?.url,
       };
 
-      // In non-production, include stack/cause for easier debugging
       if (process.env.NODE_ENV !== 'production') {
         const stack = getOptionalErrorStack(exception);
         const cause = getOptionalErrorCause(exception);
@@ -54,7 +52,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Unhandled exceptions -> 500
     const status = HttpStatus.INTERNAL_SERVER_ERROR;
 
     const body: Record<string, unknown> = {

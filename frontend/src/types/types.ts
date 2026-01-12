@@ -55,13 +55,30 @@ export interface Revisao {
   registro_origem_id: number;
   registro_conclusao_id?: number;
   data_revisao: string;
-  status_revisao: "PENDENTE" | "CONCLUIDA" | "ATRASADA" | "ADIADA";
+  status_revisao: "PENDENTE" | "CONCLUIDA" | "ATRASADA" | "ADIADA" | "EXPIRADA";
   google_event_id?: string;
   creatorId: number;
   created_at: string;
   updated_at: string;
   registro_origem?: RegistroEstudo;
   tema?: TemaDeEstudo;
+}
+
+export interface RevisaoNotification {
+  revisaoId: number;
+  status: Revisao["status_revisao"];
+  dataRevisao: string;
+  tipo: "hoje" | "em_breve" | "atrasada" | "expirada";
+  tema?: string;
+  mensagem: string;
+}
+
+export interface OfensivaResumo {
+  atual: number;
+  bloqueiosTotais: number;
+  bloqueiosUsados: number;
+  bloqueiosRestantes: number;
+  ultimoDiaAtivo: string | null;
 }
 
 export interface SlotCronograma {

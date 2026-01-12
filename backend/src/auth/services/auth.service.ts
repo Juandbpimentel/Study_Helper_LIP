@@ -55,7 +55,6 @@ export class AuthService {
 
   async validateUser(email: string, senha: string): Promise<Usuario | null> {
     const normalizedEmail = this.normalizeEmail(email);
-    // pedir a senha explicitamente para validar
     const user = await this.usersService.findByEmail(normalizedEmail, {
       withPassword: true,
     });

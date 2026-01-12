@@ -24,7 +24,6 @@ describe('date.utils', () => {
       0,
     );
     expect(result.getTime()).toBe(expected.getTime());
-    // não muta a instância original
     expect(input.toISOString()).toBe('2026-01-08T15:23:45.678Z');
   });
 
@@ -36,7 +35,7 @@ describe('date.utils', () => {
   });
 
   it('startOfWeek: retorna o início da semana baseado no primeiroDia (local)', () => {
-    const date = new Date(2026, 0, 8, 15, 0, 0); // Qui 2026-01-08
+    const date = new Date(2026, 0, 8, 15, 0, 0);
 
     const monday = startOfWeek(date, DiaSemana.Seg);
     const expectedMon = new Date(2026, 0, 5, 0, 0, 0);
@@ -72,7 +71,6 @@ describe('date.utils', () => {
 
   it('formatISODate: formata usando startOfDay', () => {
     const date = new Date('2026-01-08T15:00:00.000Z');
-    // Usa o início do dia local como referência
     const expected = startOfDay(date).toISOString();
     expect(formatISODate(date)).toBe(expected);
   });

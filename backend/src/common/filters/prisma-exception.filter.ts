@@ -51,9 +51,6 @@ export class PrismaExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Outros erros conhecidos do Prisma podem ser mapeados aqui.
-
-    // Se não for tratado, re-throw para o manipulador padrão lidar.
     throw exception;
   }
 }

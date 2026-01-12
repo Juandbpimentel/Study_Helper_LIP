@@ -109,7 +109,7 @@ export class PdfService {
     const healthPath = env('PDF_HEALTH_PATH') ?? '/health';
     const healthUrl = `${baseUrl.replace(/\/$/, '')}${healthPath.startsWith('/') ? '' : '/'}${healthPath}`;
 
-    const maxTotalMs = Number(env('PDF_WARMUP_MAX_TOTAL_MS') ?? '240000'); // ~4 min
+    const maxTotalMs = Number(env('PDF_WARMUP_MAX_TOTAL_MS') ?? '240000');
     const intervalMs = Number(env('PDF_WARMUP_INTERVAL_MS') ?? '5000');
     const timeoutMs = Number(env('PDF_WARMUP_TIMEOUT_MS') ?? '5000');
 
@@ -141,7 +141,6 @@ export class PdfService {
         }
 
         if (looksLikeCloudflareChallenge(res, raw)) {
-          // Não adianta esperar: challenge não é resolvível por server-to-server.
           const rawPreview = truncateForLogs(raw, 800);
           throw new HttpException(
             {
@@ -187,11 +186,10 @@ export class PdfService {
 
     await this.warmUpPdfService(baseUrl);
 
-    // Configuráveis via env
     const maxRetries = Number(env('PDF_REQUEST_MAX_RETRIES') ?? '6');
-    const timeoutMs = Number(env('PDF_REQUEST_TIMEOUT_MS') ?? '10000'); // per attempt
+    const timeoutMs = Number(env('PDF_REQUEST_TIMEOUT_MS') ?? '10000');
     const baseDelay = Number(env('PDF_REQUEST_BASE_DELAY_MS') ?? '3000');
-    const maxTotalMs = Number(env('PDF_REQUEST_MAX_TOTAL_MS') ?? '60000'); // total budget
+    const maxTotalMs = Number(env('PDF_REQUEST_MAX_TOTAL_MS') ?? '60000');
 
     const start = Date.now();
 
@@ -232,11 +230,9 @@ export class PdfService {
           return { buffer: Buffer.from(ab), contentDisposition };
         }
 
-        // If 429 or 5xx: consider retrying
         const status = res.status;
         const raw = await res.text();
 
-        // Cloudflare/anti-bot challenge pages cannot be solved server-to-server.
         if (looksLikeCloudflareChallenge(res, raw)) {
           const rawPreview = truncateForLogs(raw, 800);
           throw new HttpException(
@@ -279,7 +275,6 @@ export class PdfService {
           continue;
         }
 
-        // Non-retriable: forward error payload if present
         throw new HttpException(
           typeof parsed === 'object' && parsed !== null
             ? parsed
@@ -294,7 +289,6 @@ export class PdfService {
       } catch (err: unknown) {
         clearTimeout(timeout);
 
-        // If we intentionally threw an HttpException (non-retriable), bubble it up.
         if (err instanceof HttpException) {
           throw err;
         }
@@ -325,7 +319,6 @@ export class PdfService {
       }
     }
 
-    // Exhausted retries / timeout
     const message =
       getErrorMessage(lastError) ?? 'Falha ao gerar PDF no microserviço.';
 

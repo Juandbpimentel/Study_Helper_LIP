@@ -14,7 +14,6 @@ import { DiaSemana, PrismaClient, StatusRevisao } from '@prisma/client';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 function looksLikeEncryptedSecret(v: string): boolean {
-  // encryptSecret retorna: v1.<iv>.<tag>.<ciphertext>
   const parts = v.split('.');
   return parts.length === 4 && parts[0] === 'v1';
 }
@@ -31,6 +30,12 @@ export type GoogleCalendarBackendStatus = {
   oauthConfigured: boolean;
   encryptionKeyConfigured: boolean;
   issues: string[];
+};
+
+export type GoogleIntegrationStatus = {
+  connected: boolean;
+  calendarId: string | null;
+  backend: GoogleCalendarBackendStatus;
 };
 
 function isObjectRecord(v: unknown): v is UnknownRecord {
@@ -84,9 +89,6 @@ function diaSemanaToByDay(dia: DiaSemana): string {
 }
 
 function formatGoogleAllDayDate(date: Date): string {
-  // Google Calendar API: para eventos all-day, `date` deve ser YYYY-MM-DD.
-  // Usamos componentes locais (ano/mês/dia) para garantir que o dia reflete o
-  // dia do usuário no seu fuso horário local, evitando deslocamentos por UTC.
   const d = startOfDay(date);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -122,7 +124,6 @@ export class GoogleCalendarService {
 
   private eventColorsPalettePromise?: Promise<Array<{ id: string; rgb: Rgb }>>;
 
-  // Evita "error typed/any" em usos do Prisma caso PrismaService não seja inferido corretamente.
   private readonly prismaDb: PrismaClient;
 
   constructor(
@@ -175,7 +176,6 @@ export class GoogleCalendarService {
 
     const palette = await this.getEventColorsPalette(calendar);
     if (!palette.length) {
-      // Fallback: ainda tenta aplicar uma cor válida default para não ficar "sem cor".
       return '1';
     }
 
@@ -204,7 +204,6 @@ export class GoogleCalendarService {
     const raw = env('GOOGLE_TOKEN_ENCRYPTION_KEY');
     if (!raw) return false;
 
-    // Mesma regra do crypto.utils: aceitar base64 (recomendado) ou hex.
     const isLikelyBase64 = /[^0-9a-f]/i.test(raw);
     const buf = Buffer.from(raw, isLikelyBase64 ? 'base64' : 'hex');
     return buf.length === 32;
@@ -242,6 +241,29 @@ export class GoogleCalendarService {
     };
   }
 
+  async getUserIntegrationStatus(
+    userId: number,
+  ): Promise<GoogleIntegrationStatus> {
+    const backend = this.getBackendStatus();
+    if (!backend.enabled) {
+      return { connected: false, calendarId: null, backend };
+    }
+
+    await this.verifyAccessAndCleanupIfRevoked(userId);
+
+    const integration =
+      await this.prismaDb.googleCalendarIntegration.findUnique({
+        where: { creatorId: userId },
+        select: { calendarId: true },
+      });
+
+    return {
+      connected: Boolean(integration),
+      calendarId: integration?.calendarId ?? null,
+      backend,
+    };
+  }
+
   private assertBackendHealthyForGoogleRoutes(): void {
     const status = this.getBackendStatus();
     if (status.enabled) return;
@@ -276,7 +298,6 @@ export class GoogleCalendarService {
 
     const status = statusCandidates.find(isNumber);
 
-    // Se temos status e não é 401/403, não tratar como revogação.
     if (typeof status === 'number' && ![401, 403].includes(status))
       return false;
 
@@ -295,10 +316,6 @@ export class GoogleCalendarService {
     if (typeof message === 'string') parts.push(message);
     if (typeof data === 'string') parts.push(data);
 
-    // Formatos comuns:
-    // - { error: 'invalid_grant', error_description: '...' }
-    // - { error: { message: '...' } }
-    // - { error: { status: 'UNAUTHENTICATED', message: '...' } }
     if (isObjectRecord(data)) {
       const errorField = getProp(data, 'error');
       const errorDescription = getProp(data, 'error_description');
@@ -425,13 +442,11 @@ export class GoogleCalendarService {
       });
     });
 
-    // Checagem rápida para detectar revogação já no callback e responder erro tratável.
     await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
       forceCheck: true,
     });
 
-    // Executa o sync em background para o callback responder rápido.
     void this.ensureCalendar(userId)
       .then(() => this.syncAllForUser(userId))
       .catch((e) => {
@@ -440,8 +455,12 @@ export class GoogleCalendarService {
         );
       });
 
-    const redirectBase = env('FRONTEND_URL') ?? 'http://localhost:3000';
-    const redirectUrl = `${redirectBase}?googleCalendar=connected`;
+    const redirectBase =
+      env('FRONTEND_URL') ?? env('APP_FRONTEND_URL') ?? 'http://localhost:3000';
+    const redirectPath = env('GOOGLE_OAUTH_REDIRECT_PATH') ?? '/profile';
+
+    const normalizedBase = redirectBase.replace(/\/$/, '');
+    const redirectUrl = `${normalizedBase}${redirectPath}?googleCalendar=connected`;
 
     return { redirectUrl };
   }
@@ -449,9 +468,13 @@ export class GoogleCalendarService {
   async disconnect(userId: number): Promise<void> {
     this.lastAccessCheckAt.delete(userId);
 
+    await this.deleteCalendarBeforeCleanup(userId);
+
     await this.prismaDb.googleCalendarIntegration.deleteMany({
       where: { creatorId: userId },
     });
+
+    await this.clearStoredGoogleEventIds(userId);
   }
 
   /**
@@ -460,7 +483,6 @@ export class GoogleCalendarService {
    * Não lança erro (ideal para rodar pós-login).
    */
   async verifyAccessAndCleanupIfRevoked(userId: number): Promise<boolean> {
-    // Se o backend não está configurado para Google, não deve quebrar login.
     if (!this.isOauthConfigured()) return false;
 
     try {
@@ -471,6 +493,34 @@ export class GoogleCalendarService {
       return Boolean(client);
     } catch {
       return false;
+    }
+  }
+
+  private async clearStoredGoogleEventIds(userId: number): Promise<void> {
+    await this.prismaDb.$transaction([
+      this.prismaDb.slotCronograma.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+      this.prismaDb.revisaoProgramada.updateMany({
+        where: { creatorId: userId, googleEventId: { not: null } },
+        data: { googleEventId: null },
+      }),
+    ]);
+  }
+
+  private async deleteCalendarBeforeCleanup(userId: number): Promise<void> {
+    try {
+      const oauth = await this.getOAuthClientOrNull(userId);
+      const calendarId = oauth?.integration?.calendarId;
+      if (!oauth || !calendarId) return;
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth.oauth2 });
+      await calendar.calendars.delete({ calendarId });
+    } catch (e) {
+      this.logger.warn(
+        `Falha ao excluir calendário do Google antes do disconnect (user ${userId}): ${String(e)}`,
+      );
     }
   }
 
@@ -513,7 +563,6 @@ export class GoogleCalendarService {
       try {
         accessToken = decryptMaybeEncryptedSecret(integration.accessToken);
       } catch (e) {
-        // Se o access token estiver corrompido, dá pra seguir só com refresh token.
         this.logger.warn(
           `Falha ao descriptografar access token (user ${userId}). Ignorando access token. ${String(e)}`,
         );
@@ -553,12 +602,12 @@ export class GoogleCalendarService {
 
     if (this.shouldCheckAccessNow(userId, opts.forceCheck)) {
       try {
-        // Chamada leve que força refresh de token quando necessário.
         await calendar.calendarList.list({ maxResults: 1 });
         this.lastAccessCheckAt.set(userId, Date.now());
       } catch (e) {
         if (this.isRevokedOrUnauthorizedError(e)) {
           await this.disconnect(userId);
+          await this.clearStoredGoogleEventIds(userId);
           if (opts.throwOnRevoked) {
             this.throwIntegrationDisconnected(
               'GOOGLE_INTEGRATION_REVOKED',
@@ -642,7 +691,6 @@ export class GoogleCalendarService {
   }
 
   async syncAllForUser(userId: number): Promise<void> {
-    // Verifica acesso e desconecta caso revogado.
     await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
       forceCheck: false,
@@ -668,7 +716,6 @@ export class GoogleCalendarService {
   async resetAndResyncAllForUser(userId: number): Promise<void> {
     this.assertBackendHealthyForGoogleRoutes();
 
-    // Garante que há integração válida antes de mexer no banco.
     const client = await this.getCalendarClientForOperation(userId, {
       throwOnRevoked: true,
       forceCheck: true,
@@ -693,13 +740,11 @@ export class GoogleCalendarService {
       .map((r) => r.googleEventId)
       .filter((v): v is string => typeof v === 'string' && v.length > 0);
 
-    // Best-effort: tenta apagar no Google (se falhar, segue adiante).
     await Promise.all([
       this.deleteSlotEventsByEventIds(userId, slotEventIds),
       this.deleteRevisionEventsByEventIds(userId, revisaoEventIds),
     ]);
 
-    // Zera os IDs locais para forçar recriação.
     await this.prismaDb.$transaction([
       this.prismaDb.slotCronograma.updateMany({
         where: { creatorId: userId, googleEventId: { not: null } },
@@ -810,11 +855,10 @@ export class GoogleCalendarService {
           });
         });
       } catch (dbErr) {
-        // Compensação best-effort: se não conseguiu persistir o eventId, tenta remover o evento criado.
         try {
           await calendar.events.delete({ calendarId, eventId });
         } catch {
-          // ignora
+          // Ignorar
         }
         throw dbErr;
       }
@@ -847,7 +891,6 @@ export class GoogleCalendarService {
               eventId,
             });
           } catch (e) {
-            // Se já não existe, ok.
             this.logger.warn(
               `Falha ao deletar eventId ${eventId} (user ${userId}): ${String(e)}`,
             );

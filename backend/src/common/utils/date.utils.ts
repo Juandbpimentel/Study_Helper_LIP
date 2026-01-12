@@ -12,7 +12,6 @@ const DIA_SEMANA_MAP: Record<DiaSemana, number> = {
 
 export function startOfDay(date: Date): Date {
   const value = new Date(date);
-  // Inicia o dia no horário local (00:00 local)
   value.setHours(0, 0, 0, 0);
   return value;
 }
@@ -47,7 +46,6 @@ export function getOffsetFromFirstDay(
 export function parseISODate(value?: string | null): Date | undefined {
   if (!value) return undefined;
 
-  // Se for apenas YYYY-MM-DD, constrói uma Date no horário local (meia-noite local)
   const dateOnlyMatch = /^\d{4}-\d{2}-\d{2}$/.test(value);
   if (dateOnlyMatch) {
     const [y, m, d] = value.split('-').map((v) => Number(v));

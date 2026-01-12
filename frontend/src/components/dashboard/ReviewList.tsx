@@ -4,9 +4,11 @@ import { Revisao } from "@/types/types";
 import { reviewService } from "@/services/review-service";
 import { studyService } from "@/services/study-service";
 import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConcludeReviewModal } from "@/components/reviews/ConcludeReviewModal";
 import { RegisterStudyModal } from "@/components/dashboard/RegisterStudyModal";
+import { offensivaService } from "@/services/offensiva-service";
+import { OfensivaResumo } from "@/types/types";
 
 interface ReviewListProps {
   reviews: Revisao[];
@@ -20,10 +22,52 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
   const [isConcludeModalOpen, setIsConcludeModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [offensivaBase, setOffensivaBase] = useState<OfensivaResumo | null>(
+    null
+  );
+
+  useEffect(() => {
+    offensivaService
+      .getMe()
+      .then((res) => setOffensivaBase(res.data || null))
+      .catch(() => null);
+  }, []);
 
   const openConcludeModal = (id: number) => {
     setPendingReviewId(id);
     setIsConcludeModalOpen(true);
+  };
+
+  const handleOffensivaFeedback = (
+    prev: OfensivaResumo | null,
+    next: OfensivaResumo | null
+  ) => {
+    if (!next) return;
+
+    if (prev && next.atual < prev.atual) {
+      setToast({
+        variant: "error",
+        message: "Ofensiva quebrada. Tente novamente amanhã.",
+      });
+    } else if (prev && next.atual > prev.atual) {
+      setToast({
+        variant: "success",
+        message: `+1 dia de ofensiva! Série: ${next.atual}d.`,
+      });
+    } else if (prev && next.bloqueiosRestantes > prev.bloqueiosRestantes) {
+      setToast({
+        variant: "success",
+        message: "Bloqueio recuperado na ofensiva!",
+      });
+    } else if (prev && next.bloqueiosRestantes < prev.bloqueiosRestantes) {
+      setToast({
+        variant: "info",
+        message: "Você usou um bloqueio da ofensiva.",
+      });
+    }
+
+    if (next) setOffensivaBase(next);
+    setTimeout(() => setToast(null), 3000);
   };
 
   const handleCompleteDirect = async () => {
@@ -39,11 +83,13 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
       } as any);
 
       await reviewService.complete(pendingReviewId);
+      const ofensivaAfter = await offensivaService.getMe();
       if (onRefresh) onRefresh();
       setToast({
         variant: "success",
         message: "Revisão concluída e registro criado.",
       });
+      handleOffensivaFeedback(offensivaBase, ofensivaAfter.data || null);
     } catch (error) {
       console.error("Erro ao concluir revisão com registro automático", error);
       setToast({ variant: "error", message: "Erro ao concluir revisão." });
@@ -62,6 +108,9 @@ export function ReviewList({ reviews, onRefresh }: ReviewListProps) {
   const handleRegisterSuccess = () => {
     setIsRegisterModalOpen(false);
     setPendingReviewId(null);
+    offensivaService.getMe().then((res) => {
+      handleOffensivaFeedback(offensivaBase, res.data || null);
+    });
     if (onRefresh) onRefresh();
   };
 

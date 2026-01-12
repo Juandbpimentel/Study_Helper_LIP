@@ -13,13 +13,24 @@ import {
   LogOut,
   FileText,
   User,
+  Bell,
 } from "lucide-react";
 import { useAppContext } from "@/context/app-context";
+import { useEffect } from "react";
+import { notificationService } from "@/services/notification-service";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAppContext();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState<number>(0);
+
+  useEffect(() => {
+    notificationService
+      .getRevisionNotifications()
+      .then((res) => setNotifCount(res.data?.length ?? 0))
+      .catch(() => setNotifCount(0));
+  }, []);
 
   const menuItems = [
     {
@@ -51,6 +62,11 @@ export function Sidebar() {
       label: "Estatísticas",
       href: "/statistics",
       icon: BarChart3,
+    },
+    {
+      label: "Notificações",
+      href: "/notifications",
+      icon: Bell,
     },
   ];
 
@@ -95,6 +111,11 @@ export function Sidebar() {
                 }`}
               />
               {item.label}
+              {item.label === "Notificações" && notifCount > 0 && (
+                <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  {notifCount}
+                </span>
+              )}
             </Link>
           );
         })}

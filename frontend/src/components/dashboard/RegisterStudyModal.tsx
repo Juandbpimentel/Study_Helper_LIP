@@ -7,6 +7,9 @@ import { studyService } from "@/services/study-service";
 import { scheduleService } from "@/services/schedule-service";
 import { reviewService } from "@/services/review-service";
 import { formatDatePt } from "@/lib/formatters";
+import { offensivaService } from "@/services/offensiva-service";
+import { ToastBanner, ToastState } from "@/components/ui/ToastBanner";
+import { OfensivaResumo } from "@/types/types";
 
 type RegistroTipoUI = "EstudoDeTema" | "EstudoAberto" | "Revisao";
 
@@ -49,6 +52,10 @@ export function RegisterStudyModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [offensivaBase, setOffensivaBase] = useState<OfensivaResumo | null>(
+    null
+  );
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   const [isCreatingTheme, setIsCreatingTheme] = useState(false);
   const [newThemeData, setNewThemeData] = useState({
@@ -103,11 +110,13 @@ export function RegisterStudyModal({
       subjectService.getAll(),
       scheduleService.get(),
       reviewService.getAll(),
+      offensivaService.getMe(),
     ])
-      .then(([themesRes, slotsRes, reviewsRes]) => {
+      .then(([themesRes, slotsRes, reviewsRes, ofensivaRes]) => {
         if (themesRes.data) setThemes(themesRes.data);
         setSlots(Array.isArray(slotsRes) ? slotsRes : []);
         setRevisions(reviewsRes.data || []);
+        setOffensivaBase(ofensivaRes.data || null);
       })
       .catch((err) => console.error("Erro ao carregar dados do modal", err))
       .finally(() => setIsLoading(false));
@@ -190,6 +199,47 @@ export function RegisterStudyModal({
             : undefined,
       });
 
+      try {
+        const ofensivaRes = await offensivaService.getMe();
+        if (ofensivaRes.data) {
+          const prev = offensivaBase;
+          const next = ofensivaRes.data;
+
+          if (prev && next.atual < prev.atual) {
+            setToast({
+              variant: "error",
+              message: "Ofensiva quebrada. Volte amanhã para recomeçar!",
+            });
+          } else if (prev && next.atual > prev.atual) {
+            setToast({
+              variant: "success",
+              message: `+1 dia de ofensiva! Série atual: ${next.atual}d.`,
+            });
+          } else if (
+            prev &&
+            next.bloqueiosRestantes > prev.bloqueiosRestantes
+          ) {
+            setToast({
+              variant: "success",
+              message: "Você recuperou um bloqueio!",
+            });
+          } else if (
+            prev &&
+            next.bloqueiosRestantes < prev.bloqueiosRestantes
+          ) {
+            setToast({
+              variant: "info",
+              message: "Bloqueio usado. Mantenha o ritmo!",
+            });
+          }
+
+          setOffensivaBase(next);
+          setTimeout(() => setToast(null), 3000);
+        }
+      } catch (err) {
+        console.error("Falha ao atualizar ofensiva", err);
+      }
+
       resetForm();
       onSuccess();
       onClose();
@@ -221,6 +271,7 @@ export function RegisterStudyModal({
 
   const handleClose = () => {
     resetForm();
+    setToast(null);
     onClose();
   };
 
@@ -228,6 +279,7 @@ export function RegisterStudyModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      {toast && <ToastBanner toast={toast} onClose={() => setToast(null)} />}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white z-10">
           <div className="flex items-center gap-2">

@@ -11,13 +11,26 @@ import {
   startOfDay as fnsStartOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock, BookOpen, RotateCcw, Target } from "lucide-react";
+import {
+  Clock,
+  BookOpen,
+  RotateCcw,
+  Target,
+  Download,
+  Flame,
+} from "lucide-react";
 
-import { Revisao, RegistroEstudo, TemaDeEstudo } from "@/types/types";
+import {
+  Revisao,
+  RegistroEstudo,
+  TemaDeEstudo,
+  OfensivaResumo,
+} from "@/types/types";
 
 import { dashboardService } from "@/services/dashboard-service";
 import { subjectService } from "@/services/subject-service";
-import { studyService } from "@/services/study-service";
+import { reportService } from "@/services/report-service";
+import { offensivaService } from "@/services/offensiva-service";
 
 import { StatCard } from "@/components/ui/StatCard";
 import { StatisticsCharts } from "@/components/statistics/StatisticsCharts";
@@ -51,17 +64,21 @@ export default function StatisticsPage() {
   const [reviews, setReviews] = useState<Revisao[]>([]);
   const [studyRecords, setStudyRecords] = useState<RegistroEstudo[]>([]);
   const [subjects, setSubjects] = useState<TemaDeEstudo[]>([]);
+  const [offensiva, setOffensiva] = useState<OfensivaResumo | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
       // 3. Ajuste na chamada da API: usa subjectService.getAll()
-      const [dashboardData, themesRes] = await Promise.all([
+      const [dashboardData, themesRes, ofensivaRes] = await Promise.all([
         dashboardService.getDashboardData(),
         subjectService.getAll(),
+        offensivaService.getMe(),
       ]);
       setReviews(dashboardData.reviews);
       setStudyRecords(dashboardData.studyRecords);
       setSubjects(themesRes.data || []);
+      setOffensiva(ofensivaRes.data || null);
     } catch (error) {
       console.error("Erro ao carregar dados", error);
     } finally {
@@ -101,6 +118,32 @@ export default function StatisticsPage() {
   }
 
   const range = computeRange();
+
+  const handleExportPdf = useCallback(async () => {
+    try {
+      setExporting(true);
+      const params: Record<string, string> = {};
+      if (range?.start) params.dataInicial = range.start.toISOString();
+      if (range?.end)
+        params.dataFinal = (() => {
+          const end = new Date(range.end);
+          end.setHours(23, 59, 59, 999);
+          return end.toISOString();
+        })();
+
+      const blob = await reportService.downloadResumoPdf(params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "relatorio_resumo.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Erro ao gerar PDF", err);
+    } finally {
+      setExporting(false);
+    }
+  }, [range]);
 
   function endOfDay(d: Date) {
     const x = new Date(d);
@@ -244,6 +287,14 @@ export default function StatisticsPage() {
                 setPeriodEnd(e);
               }}
             />
+            <button
+              onClick={handleExportPdf}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-lg shadow-sm transition-all"
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Gerando..." : "Exportar PDF"}
+            </button>
           </div>
         </div>
 
@@ -302,6 +353,15 @@ export default function StatisticsPage() {
             icon={Target}
             colorClass="bg-purple-100 text-purple-600"
           />
+          {offensiva && (
+            <StatCard
+              title="Ofensiva"
+              value={`${offensiva.atual}d`}
+              subtitle={`Bloqueios: ${offensiva.bloqueiosRestantes}/${offensiva.bloqueiosTotais}`}
+              icon={Flame}
+              colorClass="bg-orange-100 text-orange-600"
+            />
+          )}
         </div>
 
         <StatisticsCharts
