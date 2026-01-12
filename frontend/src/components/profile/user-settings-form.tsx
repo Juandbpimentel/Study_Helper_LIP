@@ -1,5 +1,5 @@
 import { DiaSemana, Usuario } from "@/lib/auth";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect } from "react";
@@ -13,7 +13,7 @@ export type ProfileFormValues = z.infer<typeof profileSchema>;
 
 interface UserSettingsFormProps {
   user: Usuario;
-  onSubmit: (data: ProfileFormValues) => void;
+  onSubmit: SubmitHandler<ProfileFormValues>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
@@ -32,13 +32,13 @@ export function UserSettingsForm({
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      nome: user.nome,
+      nome: user.nome ?? "",
     },
   });
 
   useEffect(() => {
     reset({
-      nome: user.nome,
+      nome: user.nome ?? "",
     });
   }, [user, reset]);
 

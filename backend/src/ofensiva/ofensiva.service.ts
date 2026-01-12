@@ -5,14 +5,34 @@ import { addDays, startOfDay } from '@/common/utils/date.utils';
 import { TipoRegistro, type Usuario } from '@prisma/client';
 
 const OFENSIVA_BLOQUEIOS_MAX = 3;
+const APP_TZ_OFFSET_MS = -3 * 60 * 60 * 1000; // UTC-3
 
-function dayKey(date: Date): string {
-  return startOfDay(date).toISOString().slice(0, 10);
+function toAppLocalMs(date: Date): number {
+  return date.getTime() + APP_TZ_OFFSET_MS;
 }
 
-function diffDaysUtc(a: Date, b: Date): number {
-  const aa = startOfDay(a).getTime();
-  const bb = startOfDay(b).getTime();
+function startOfDayTz(date: Date): Date {
+  const local = new Date(toAppLocalMs(date));
+  const localStart = Date.UTC(
+    local.getUTCFullYear(),
+    local.getUTCMonth(),
+    local.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  return new Date(localStart - APP_TZ_OFFSET_MS);
+}
+
+function dayKey(date: Date): string {
+  const local = new Date(toAppLocalMs(date));
+  return local.toISOString().slice(0, 10);
+}
+
+function diffDaysTz(a: Date, b: Date): number {
+  const aa = startOfDayTz(a).getTime();
+  const bb = startOfDayTz(b).getTime();
   return Math.floor((aa - bb) / (24 * 60 * 60 * 1000));
 }
 
@@ -43,7 +63,7 @@ export class OfensivaService {
     const days: DayAgg[] = [];
 
     for (const r of args.registrosAsc) {
-      const d = startOfDay(r.dataEstudo);
+      const d = startOfDayTz(r.dataEstudo);
       const key = dayKey(d);
 
       const last = days.length ? days[days.length - 1] : undefined;
@@ -67,7 +87,7 @@ export class OfensivaService {
         bloqueiosUsados = 0;
         lastActiveDay = day;
       } else {
-        const diff = diffDaysUtc(day, lastActiveDay);
+        const diff = diffDaysTz(day, lastActiveDay);
         if (diff > 0) {
           if (diff === 1) {
             ofensivaAtual += 1;
@@ -94,8 +114,8 @@ export class OfensivaService {
       }
     }
 
-    const hoje = startOfDay(new Date());
-    const ultimoDiaAtivo = lastActiveDay ? startOfDay(lastActiveDay) : null;
+    const hoje = startOfDayTz(new Date());
+    const ultimoDiaAtivo = lastActiveDay ? startOfDayTz(lastActiveDay) : null;
 
     if (!ultimoDiaAtivo) {
       return {
@@ -107,7 +127,7 @@ export class OfensivaService {
       };
     }
 
-    const diffHoje = diffDaysUtc(hoje, ultimoDiaAtivo);
+    const diffHoje = diffDaysTz(hoje, ultimoDiaAtivo);
     const faltasEntreHojeEUltimo = Math.max(0, diffHoje - 1);
     const usadosTotal = bloqueiosUsados + faltasEntreHojeEUltimo;
     const estourou = usadosTotal > bloqueiosTotais;
@@ -152,8 +172,8 @@ export class OfensivaService {
       };
     }
 
-    const hoje = startOfDay(new Date());
-    const ultimo = startOfDay(usuario.ofensivaUltimoDiaAtivo);
+    const hoje = startOfDayTz(new Date());
+    const ultimo = startOfDayTz(usuario.ofensivaUltimoDiaAtivo);
     const diff = Math.floor(
       (hoje.getTime() - ultimo.getTime()) / (24 * 60 * 60 * 1000),
     );
@@ -175,7 +195,7 @@ export class OfensivaService {
       bloqueiosRestantes: estourou
         ? 0
         : Math.max(0, bloqueiosTotaisClamped - Math.max(0, usados)),
-      ultimoDiaAtivo: ultimo.toISOString().slice(0, 10),
+      ultimoDiaAtivo: dayKey(ultimo),
     };
   }
 

@@ -75,7 +75,7 @@ export const studyService = {
   async deleteAll(): Promise<ApiResponse<void>> {
     try {
       await api.delete<void>(`/registros`);
-      return { data: undefined, error: null };
+      return { data: undefined };
     } catch (err: unknown) {
       let message = "Erro ao apagar registros";
       if (isAxiosError(err)) {
@@ -83,7 +83,7 @@ export const studyService = {
       } else if (err instanceof Error) {
         message = err.message;
       }
-      return { data: null, error: message };
+      return { error: message };
     }
   },
 };
