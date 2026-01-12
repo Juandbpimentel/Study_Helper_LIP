@@ -34,7 +34,8 @@ export const googleIntegrationService = {
     const res = await api.get<{ authUrl: string }>(
       "/integrations/google/oauth/start"
     );
-    if (!res.data) throw new Error("Resposta inválida do servidor ao iniciar OAuth");
+    if (!res.data)
+      throw new Error("Resposta inválida do servidor ao iniciar OAuth");
     return res.data.authUrl;
   },
 
